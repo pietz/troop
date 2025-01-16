@@ -1,0 +1,3 @@
+# troop
+
+A Python package.
