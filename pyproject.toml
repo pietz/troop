@@ -1,5 +1,5 @@
 [project]
-name = "Troop"
+name = "troop"
 version = "0.0.2"
 description = "A lightweight framework for multi-agent orchestration, forked from OpenAI's Swarm library."
 authors = []

@@ -11,3 +11,4 @@ wheels/
 .python-version
 uv.lock
 swarm
+.env
