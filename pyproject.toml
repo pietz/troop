@@ -1,9 +1,11 @@
 [project]
-name = "troop"
-version = "0.0.1"
-description = "A Python package"
+name = "Troop"
+version = "0.0.2"
+description = "A lightweight framework for multi-agent orchestration, forked from OpenAI's Swarm library."
 authors = []
-dependencies = []
+dependencies = [
+    "openai>=1.59.7",
+]
 readme = "README.md"
 requires-python = ">=3.10"
 
