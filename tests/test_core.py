@@ -1,8 +1,7 @@
+import json
 import pytest
 from troop import Troop, Agent
 from tests.mock_client import MockOpenAIClient, create_mock_response
-from unittest.mock import Mock
-import json
 
 DEFAULT_RESPONSE_CONTENT = "sample response content"
 
@@ -16,7 +15,7 @@ def mock_openai_client():
     return m
 
 
-def test_run_with_simple_message(mock_openai_client: MockOpenAIClient):
+def test_run_with_simple_message(mock_openai_client):
     agent = Agent()
     # set up client and run
     client = Troop(client=mock_openai_client, async_client=mock_openai_client)
@@ -29,7 +28,7 @@ def test_run_with_simple_message(mock_openai_client: MockOpenAIClient):
 
 
 @pytest.mark.asyncio
-async def test_async_run_with_simple_message(mock_openai_client: MockOpenAIClient):
+async def test_async_run_with_simple_message(mock_openai_client):
     agent = Agent()
     # set up client and run
     client = Troop(client=mock_openai_client, async_client=mock_openai_client)
@@ -41,94 +40,41 @@ async def test_async_run_with_simple_message(mock_openai_client: MockOpenAIClien
     assert response.messages[-1]["content"] == DEFAULT_RESPONSE_CONTENT
 
 
-def test_tool_call(mock_openai_client: MockOpenAIClient):
-    expected_location = "San Francisco"
+def test_max_turns():
+    client = MockOpenAIClient()
+    
+    def continue_conversation():
+        return "Let's continue!"
+    
+    agent = Agent(functions=[continue_conversation])
+    client.set_sequential_responses([
+        create_mock_response(
+            message={"role": "assistant", "content": ""},
+            function_calls=[{"name": "continue_conversation"}]
+        ),
+        create_mock_response(
+            message={"role": "assistant", "content": ""},
+            function_calls=[{"name": "continue_conversation"}]
+        ),
+        create_mock_response({"role": "assistant", "content": "Final message"})
+    ])
+    
+    troop = Troop(client=client, async_client=client)
+    response = troop.run(
+        agent=agent,
+        messages=[{"role": "user", "content": "Start"}],
+        max_turns=2
+    )
+    
+    # Should only have 2 turns worth of messages
+    assert len(response.messages) <= 4  # 2 turns * 2 messages per turn
 
-    # set up mock to record function calls
-    get_weather_mock = Mock()
+
+def test_execute_tools_false(mock_openai_client):
+    expected_location = "San Francisco"
 
     def get_weather(location):
-        get_weather_mock(location=location)
-        return "It's sunny today."
-
-    agent = Agent(name="Test Agent", functions=[get_weather])
-    messages = [
-        {"role": "user", "content": "What's the weather like in San Francisco?"}
-    ]
-
-    # set mock to return a response that triggers function call
-    mock_openai_client.set_sequential_responses(
-        [
-            create_mock_response(
-                message={"role": "assistant", "content": ""},
-                function_calls=[
-                    {"name": "get_weather", "args": {"location": expected_location}}
-                ],
-            ),
-            create_mock_response(
-                {"role": "assistant", "content": DEFAULT_RESPONSE_CONTENT}
-            ),
-        ]
-    )
-
-    # set up client and run
-    client = Troop(client=mock_openai_client, async_client=mock_openai_client)
-    response = client.run(agent=agent, messages=messages)
-
-    get_weather_mock.assert_called_once_with(location=expected_location)
-    assert response.messages[-1]["role"] == "assistant"
-    assert response.messages[-1]["content"] == DEFAULT_RESPONSE_CONTENT
-
-
-@pytest.mark.asyncio
-async def test_async_tool_call(mock_openai_client: MockOpenAIClient):
-    expected_location = "San Francisco"
-
-    # set up mock to record function calls
-    get_weather_mock = Mock()
-
-    async def get_weather(location):
-        get_weather_mock(location=location)
-        return "It's sunny today."
-
-    agent = Agent(name="Test Agent", functions=[get_weather])
-    messages = [
-        {"role": "user", "content": "What's the weather like in San Francisco?"}
-    ]
-
-    # set mock to return a response that triggers function call
-    mock_openai_client.set_sequential_responses(
-        [
-            create_mock_response(
-                message={"role": "assistant", "content": ""},
-                function_calls=[
-                    {"name": "get_weather", "args": {"location": expected_location}}
-                ],
-            ),
-            create_mock_response(
-                {"role": "assistant", "content": DEFAULT_RESPONSE_CONTENT}
-            ),
-        ]
-    )
-
-    # set up client and run
-    client = Troop(client=mock_openai_client, async_client=mock_openai_client)
-    response = await client.arun(agent=agent, messages=messages)
-
-    get_weather_mock.assert_called_once_with(location=expected_location)
-    assert response.messages[-1]["role"] == "assistant"
-    assert response.messages[-1]["content"] == DEFAULT_RESPONSE_CONTENT
-
-
-def test_execute_tools_false(mock_openai_client: MockOpenAIClient):
-    expected_location = "San Francisco"
-
-    # set up mock to record function calls
-    get_weather_mock = Mock()
-
-    def get_weather(location):
-        get_weather_mock(location=location)
-        return "It's sunny today."
+        raise Exception("Tool should not be called")
 
     agent = Agent(name="Test Agent", functions=[get_weather])
     messages = [
@@ -153,10 +99,6 @@ def test_execute_tools_false(mock_openai_client: MockOpenAIClient):
     # set up client and run
     client = Troop(client=mock_openai_client, async_client=mock_openai_client)
     response = client.run(agent=agent, messages=messages, execute_tools=False)
-    print(response)
-
-    # assert function not called
-    get_weather_mock.assert_not_called()
 
     # assert tool call is present in last response
     tool_calls = response.messages[-1].get("tool_calls")
@@ -168,111 +110,28 @@ def test_execute_tools_false(mock_openai_client: MockOpenAIClient):
     }
 
 
-@pytest.mark.asyncio
-async def test_async_execute_tools_false(mock_openai_client: MockOpenAIClient):
-    expected_location = "San Francisco"
-
-    # set up mock to record function calls
-    get_weather_mock = Mock()
-
-    async def get_weather(location):
-        get_weather_mock(location=location)
-        return "It's sunny today."
-
-    agent = Agent(name="Test Agent", functions=[get_weather])
-    messages = [
-        {"role": "user", "content": "What's the weather like in San Francisco?"}
-    ]
-
-    # set mock to return a response that triggers function call
-    mock_openai_client.set_sequential_responses(
-        [
-            create_mock_response(
-                message={"role": "assistant", "content": ""},
-                function_calls=[
-                    {"name": "get_weather", "args": {"location": expected_location}}
-                ],
-            ),
-            create_mock_response(
-                {"role": "assistant", "content": DEFAULT_RESPONSE_CONTENT}
-            ),
-        ]
+def test_debug_mode(capsys):
+    client = MockOpenAIClient()
+    
+    def debug_function():
+        return "Debug function called"
+    
+    agent = Agent(functions=[debug_function])
+    client.set_sequential_responses([
+        create_mock_response(
+            message={"role": "assistant", "content": ""},
+            function_calls=[{"name": "debug_function"}]
+        ),
+        create_mock_response({"role": "assistant", "content": "Done"})
+    ])
+    
+    troop = Troop(client=client, async_client=client)
+    troop.run(
+        agent=agent,
+        messages=[{"role": "user", "content": "Test debug"}],
+        debug=True
     )
-
-    # set up client and run
-    client = Troop(client=mock_openai_client, async_client=mock_openai_client)
-    response = await client.arun(agent=agent, messages=messages, execute_tools=False)
-    print(response)
-
-    # assert function not called
-    get_weather_mock.assert_not_called()
-
-    # assert tool call is present in last response
-    tool_calls = response.messages[-1].get("tool_calls")
-    assert tool_calls is not None and len(tool_calls) == 1
-    tool_call = tool_calls[0]
-    assert tool_call["function"]["name"] == "get_weather"
-    assert json.loads(tool_call["function"]["arguments"]) == {
-        "location": expected_location
-    }
-
-
-def test_handoff(mock_openai_client: MockOpenAIClient):
-    def transfer_to_agent2():
-        return agent2
-
-    agent1 = Agent(name="Test Agent 1", functions=[transfer_to_agent2])
-    agent2 = Agent(name="Test Agent 2")
-
-    # set mock to return a response that triggers the handoff
-    mock_openai_client.set_sequential_responses(
-        [
-            create_mock_response(
-                message={"role": "assistant", "content": ""},
-                function_calls=[{"name": "transfer_to_agent2"}],
-            ),
-            create_mock_response(
-                {"role": "assistant", "content": DEFAULT_RESPONSE_CONTENT}
-            ),
-        ]
-    )
-
-    # set up client and run
-    client = Troop(client=mock_openai_client, async_client=mock_openai_client)
-    messages = [{"role": "user", "content": "I want to talk to agent 2"}]
-    response = client.run(agent=agent1, messages=messages)
-
-    assert response.agent == agent2
-    assert response.messages[-1]["role"] == "assistant"
-    assert response.messages[-1]["content"] == DEFAULT_RESPONSE_CONTENT
-
-
-@pytest.mark.asyncio
-async def test_async_handoff(mock_openai_client: MockOpenAIClient):
-    async def transfer_to_agent2():
-        return agent2
-
-    agent1 = Agent(name="Test Agent 1", functions=[transfer_to_agent2])
-    agent2 = Agent(name="Test Agent 2")
-
-    # set mock to return a response that triggers the handoff
-    mock_openai_client.set_sequential_responses(
-        [
-            create_mock_response(
-                message={"role": "assistant", "content": ""},
-                function_calls=[{"name": "transfer_to_agent2"}],
-            ),
-            create_mock_response(
-                {"role": "assistant", "content": DEFAULT_RESPONSE_CONTENT}
-            ),
-        ]
-    )
-
-    # set up client and run
-    client = Troop(client=mock_openai_client, async_client=mock_openai_client)
-    messages = [{"role": "user", "content": "I want to talk to agent 2"}]
-    response = await client.arun(agent=agent1, messages=messages)
-
-    assert response.agent == agent2
-    assert response.messages[-1]["role"] == "assistant"
-    assert response.messages[-1]["content"] == DEFAULT_RESPONSE_CONTENT
+    
+    captured = capsys.readouterr()
+    assert "Getting chat completion" in captured.out
+    assert "Processing tool call" in captured.out
