@@ -12,3 +12,4 @@ wheels/
 uv.lock
 swarm
 .env
+.DS_Store
