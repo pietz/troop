@@ -181,7 +181,7 @@ class Troop:
 
             yield {"delim": "start"}
             async for chunk in completion:
-                delta = json.loads(chunk.choices[0].delta.json())
+                delta = json.loads(chunk.choices[0].delta.model_dump_json())
                 if delta["role"] == "assistant":
                     delta["sender"] = active_agent.name
                 yield delta
