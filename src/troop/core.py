@@ -1,15 +1,16 @@
 # Standard library imports
 import copy
+import inspect
 import json
 from collections import defaultdict
-from typing import List, Callable, Union
+from typing import List, Callable, Union, AsyncGenerator, Any, Dict
 
 # Package/library imports
-from openai import OpenAI
-
+from openai import OpenAI, AsyncOpenAI
+from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 # Local imports
-from .util import function_to_json, debug_print, merge_chunk
+from .util import function_to_json, debug_print, merge_chunk, run_sync
 from .types import (
     Agent,
     AgentFunction,
@@ -24,12 +25,15 @@ __CTX_VARS_NAME__ = "context_variables"
 
 
 class Troop:
-    def __init__(self, client=None):
+    def __init__(self, client=None, async_client=None):
         if not client:
             client = OpenAI()
+        if not async_client:
+            async_client = AsyncOpenAI()
         self.client = client
+        self.async_client = async_client
 
-    def get_chat_completion(
+    async def aget_chat_completion(
         self,
         agent: Agent,
         history: List,
@@ -66,9 +70,9 @@ class Troop:
         if tools:
             create_params["parallel_tool_calls"] = agent.parallel_tool_calls
 
-        return self.client.chat.completions.create(**create_params)
+        return await self.async_client.chat.completions.create(**create_params)
 
-    def handle_function_result(self, result, debug) -> Result:
+    async def ahandle_function_result(self, result, debug) -> Result:
         match result:
             case Result() as result:
                 return result
@@ -80,13 +84,14 @@ class Troop:
                 )
             case _:
                 try:
-                    return Result(value=str(result))
+                    str_result = str(result)  # Try conversion first
+                    return Result(value=str_result)
                 except Exception as e:
                     error_message = f"Failed to cast response to string: {result}. Make sure agent functions return a string or Result object. Error: {str(e)}"
                     debug_print(debug, error_message)
-                    raise TypeError(error_message)
+                    raise TypeError(error_message) from e  # Preserve original error chain
 
-    def handle_tool_calls(
+    async def ahandle_tool_calls(
         self,
         tool_calls: List[ChatCompletionMessageToolCall],
         functions: List[AgentFunction],
@@ -117,9 +122,9 @@ class Troop:
             # pass context_variables to agent functions
             if __CTX_VARS_NAME__ in func.__code__.co_varnames:
                 args[__CTX_VARS_NAME__] = context_variables
-            raw_result = function_map[name](**args)
+            raw_result = await function_map[name](**args) if inspect.iscoroutinefunction(function_map[name]) else function_map[name](**args)
 
-            result: Result = self.handle_function_result(raw_result, debug)
+            result: Result = await self.ahandle_function_result(raw_result, debug)
             partial_response.messages.append(
                 {
                     "role": "tool",
@@ -134,7 +139,7 @@ class Troop:
 
         return partial_response
 
-    def run_and_stream(
+    async def arun_and_stream(
         self,
         agent: Agent,
         messages: List,
@@ -165,7 +170,7 @@ class Troop:
             }
 
             # get completion with current history, agent
-            completion = self.get_chat_completion(
+            completion = await self.aget_chat_completion(
                 agent=active_agent,
                 history=history,
                 context_variables=context_variables,
@@ -175,7 +180,7 @@ class Troop:
             )
 
             yield {"delim": "start"}
-            for chunk in completion:
+            async for chunk in completion:
                 delta = json.loads(chunk.choices[0].delta.json())
                 if delta["role"] == "assistant":
                     delta["sender"] = active_agent.name
@@ -208,7 +213,7 @@ class Troop:
                 tool_calls.append(tool_call_object)
 
             # handle function calls, updating context_variables, and switching agents
-            partial_response = self.handle_tool_calls(
+            partial_response = await self.ahandle_tool_calls(
                 tool_calls, active_agent.functions, context_variables, debug
             )
             history.extend(partial_response.messages)
@@ -224,7 +229,7 @@ class Troop:
             )
         }
 
-    def run(
+    async def arun(
         self,
         agent: Agent,
         messages: List,
@@ -252,7 +257,7 @@ class Troop:
 
         while len(history) - init_len < max_turns and active_agent:
             # get completion with current history, agent
-            completion = self.get_chat_completion(
+            completion = await self.aget_chat_completion(
                 agent=active_agent,
                 history=history,
                 context_variables=context_variables,
@@ -272,7 +277,7 @@ class Troop:
                 break
 
             # handle function calls, updating context_variables, and switching agents
-            partial_response = self.handle_tool_calls(
+            partial_response = await self.ahandle_tool_calls(
                 message.tool_calls, active_agent.functions, context_variables, debug
             )
             history.extend(partial_response.messages)
@@ -284,4 +289,109 @@ class Troop:
             messages=history[init_len:],
             agent=active_agent,
             context_variables=context_variables,
+        )
+
+    def get_chat_completion(
+        self,
+        agent: Agent,
+        history: List,
+        context_variables: dict,
+        model_override: str,
+        stream: bool,
+        debug: bool,
+    ) -> Union[ChatCompletion, ChatCompletionChunk]:
+        """Synchronous version of aget_chat_completion"""
+        return run_sync(
+            self.aget_chat_completion(
+                agent=agent,
+                history=history,
+                context_variables=context_variables,
+                model_override=model_override,
+                stream=stream,
+                debug=debug,
+            )
+        )
+
+    def handle_function_result(self, result: Any, debug: bool) -> Result:
+        """Synchronous version of ahandle_function_result"""
+        return run_sync(self.ahandle_function_result(result, debug))
+
+    def handle_tool_calls(
+        self,
+        tool_calls: List[ChatCompletionMessageToolCall],
+        functions: List[AgentFunction],
+        context_variables: dict,
+        debug: bool,
+    ) -> Response:
+        """Synchronous version of ahandle_tool_calls"""
+        return run_sync(
+            self.ahandle_tool_calls(
+                tool_calls=tool_calls,
+                functions=functions,
+                context_variables=context_variables,
+                debug=debug,
+            )
+        )
+
+    def run_and_stream(
+        self,
+        agent: Agent,
+        messages: List,
+        context_variables: dict = {},
+        model_override: str = None,
+        debug: bool = False,
+        max_turns: int = float("inf"),
+        execute_tools: bool = True,
+    ):
+        """Synchronous version of arun_and_stream"""
+        async_gen = self.arun_and_stream(
+            agent=agent,
+            messages=messages,
+            context_variables=context_variables,
+            model_override=model_override,
+            debug=debug,
+            max_turns=max_turns,
+            execute_tools=execute_tools,
+        )
+        
+        # Convert async generator to sync generator
+        while True:
+            try:
+                yield run_sync(async_gen.__anext__())
+            except StopAsyncIteration:
+                break
+
+    def run(
+        self,
+        agent: Agent,
+        messages: List,
+        context_variables: dict = {},
+        model_override: str = None,
+        stream: bool = False,
+        debug: bool = False,
+        max_turns: int = float("inf"),
+        execute_tools: bool = True,
+    ) -> Response:
+        """Synchronous version of arun"""
+        if stream:
+            return self.run_and_stream(
+                agent=agent,
+                messages=messages,
+                context_variables=context_variables,
+                model_override=model_override,
+                debug=debug,
+                max_turns=max_turns,
+                execute_tools=execute_tools,
+            )
+        return run_sync(
+            self.arun(
+                agent=agent,
+                messages=messages,
+                context_variables=context_variables,
+                model_override=model_override,
+                stream=stream,
+                debug=debug,
+                max_turns=max_turns,
+                execute_tools=execute_tools,
+            )
         )

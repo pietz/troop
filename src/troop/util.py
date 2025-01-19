@@ -1,5 +1,31 @@
 import inspect
+import asyncio
+import contextvars
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from typing import Any, Coroutine, TypeVar
+
+T = TypeVar("T")
+
+def run_sync(coro: Coroutine[Any, Any, T]) -> T:
+    """
+    Runs an async coroutine synchronously, preserving context variables.
+    
+    If there's already a running loop, it uses a thread pool to avoid conflicts.
+    Otherwise, it simply runs the coroutine via asyncio.run.
+    """
+    ctx = contextvars.copy_context()
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        with ThreadPoolExecutor() as executor:
+            future = executor.submit(ctx.run, asyncio.run, coro)
+            return future.result()
+    else:
+        return ctx.run(asyncio.run, coro)
 
 
 def debug_print(debug: bool, *args: str) -> None:

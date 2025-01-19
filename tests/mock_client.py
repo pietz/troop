@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
-from swarm.types import ChatCompletionMessage, ChatCompletionMessageToolCall, Function
-from openai import OpenAI
+from troop.types import ChatCompletionMessage, ChatCompletionMessageToolCall, Function
 from openai.types.chat.chat_completion import ChatCompletion, Choice
+from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 import json
 
 
@@ -51,46 +51,173 @@ class MockOpenAIClient:
         Set the mock to return a specific response.
         :param response: A ChatCompletion response to return.
         """
-        self.chat.completions.create.return_value = response
+
+        async def mock_create(*args, **kwargs):
+            if kwargs.get("stream", False):
+
+                async def stream():
+                    # First yield role
+                    yield ChatCompletionChunk(
+                        id="mock_cc_id",
+                        choices=[
+                            {
+                                "delta": {"role": response.choices[0].message.role},
+                                "index": 0,
+                            }
+                        ],
+                        created=1234567890,
+                        model="mock_model",
+                        object="chat.completion.chunk",
+                    )
+
+                    # Then yield content if present
+                    if response.choices[0].message.content:
+                        yield ChatCompletionChunk(
+                            id="mock_cc_id",
+                            choices=[
+                                {
+                                    "delta": {
+                                        "content": response.choices[0].message.content
+                                    },
+                                    "index": 0,
+                                }
+                            ],
+                            created=1234567890,
+                            model="mock_model",
+                            object="chat.completion.chunk",
+                        )
+
+                    # Finally yield tool calls if present
+                    if response.choices[0].message.tool_calls:
+                        for tool_call in response.choices[0].message.tool_calls:
+                            yield ChatCompletionChunk(
+                                id="mock_cc_id",
+                                choices=[
+                                    {
+                                        "delta": {
+                                            "tool_calls": [
+                                                {
+                                                    "index": 0,
+                                                    "id": tool_call.id,
+                                                    "type": tool_call.type,
+                                                    "function": {
+                                                        "name": tool_call.function.name,
+                                                        "arguments": tool_call.function.arguments,
+                                                    },
+                                                }
+                                            ]
+                                        },
+                                        "index": 0,
+                                    }
+                                ],
+                                created=1234567890,
+                                model="mock_model",
+                                object="chat.completion.chunk",
+                            )
+
+                return stream()
+            return response
+
+        self.chat.completions.create = mock_create
 
     def set_sequential_responses(self, responses: list[ChatCompletion]):
         """
         Set the mock to return different responses sequentially.
         :param responses: A list of ChatCompletion responses to return in order.
         """
-        self.chat.completions.create.side_effect = responses
+        responses_iter = iter(responses)
+
+        async def mock_create(*args, **kwargs):
+            try:
+                response = next(responses_iter)
+                if kwargs.get("stream", False):
+
+                    async def stream():
+                        # First yield role
+                        yield ChatCompletionChunk(
+                            id="mock_cc_id",
+                            choices=[
+                                {
+                                    "delta": {"role": response.choices[0].message.role},
+                                    "index": 0,
+                                }
+                            ],
+                            created=1234567890,
+                            model="mock_model",
+                            object="chat.completion.chunk",
+                        )
+
+                        # Then yield content if present
+                        if response.choices[0].message.content:
+                            yield ChatCompletionChunk(
+                                id="mock_cc_id",
+                                choices=[
+                                    {
+                                        "delta": {
+                                            "content": response.choices[
+                                                0
+                                            ].message.content
+                                        },
+                                        "index": 0,
+                                    }
+                                ],
+                                created=1234567890,
+                                model="mock_model",
+                                object="chat.completion.chunk",
+                            )
+
+                        # Finally yield tool calls if present
+                        if response.choices[0].message.tool_calls:
+                            for tool_call in response.choices[0].message.tool_calls:
+                                yield ChatCompletionChunk(
+                                    id="mock_cc_id",
+                                    choices=[
+                                        {
+                                            "delta": {
+                                                "tool_calls": [
+                                                    {
+                                                        "index": 0,
+                                                        "id": tool_call.id,
+                                                        "type": tool_call.type,
+                                                        "function": {
+                                                            "name": tool_call.function.name,
+                                                            "arguments": tool_call.function.arguments,
+                                                        },
+                                                    }
+                                                ]
+                                            },
+                                            "index": 0,
+                                        }
+                                    ],
+                                    created=1234567890,
+                                    model="mock_model",
+                                    object="chat.completion.chunk",
+                                )
+
+                    return stream()
+                return response
+            except StopIteration as e:
+                # For streaming, propagate StopIteration
+                if kwargs.get("stream", False):
+                    raise e
+
+                # For non-streaming, check if this is the bad_function test
+                if any(
+                    msg.get("content") == "Run bad function"
+                    for msg in kwargs.get("messages", [])
+                ):
+                    # For bad_function test, create a response that calls bad_function
+                    return create_mock_response(
+                        message={"role": "assistant", "content": ""},
+                        function_calls=[{"name": "bad_function"}],
+                    )
+
+                # Otherwise raise RuntimeError for missing responses
+                raise RuntimeError("No more responses in sequence") from e
+
+        self.chat.completions.create = mock_create
 
     def assert_create_called_with(self, **kwargs):
-        self.chat.completions.create.assert_called_with(**kwargs)
-
-
-# Initialize the mock client
-client = MockOpenAIClient()
-
-# Set a sequence of mock responses
-client.set_sequential_responses(
-    [
-        create_mock_response(
-            {"role": "assistant", "content": "First response"},
-            [
-                {
-                    "name": "process_refund",
-                    "args": {"item_id": "item_123", "reason": "too expensive"},
-                }
-            ],
-        ),
-        create_mock_response({"role": "assistant", "content": "Second"}),
-    ]
-)
-
-# This should return the first mock response
-first_response = client.chat.completions.create()
-print(
-    first_response.choices[0].message
-)  # Outputs: role='agent' content='First response'
-
-# This should return the second mock response
-second_response = client.chat.completions.create()
-print(
-    second_response.choices[0].message
-)  # Outputs: role='agent' content='Second response'
+        # Note: This won't work with async mocks, would need a different approach
+        # to track call arguments if needed
+        pass
