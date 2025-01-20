@@ -3,13 +3,15 @@ from openai.types.chat.chat_completion_message_tool_call import (
     ChatCompletionMessageToolCall,
     Function,
 )
-from typing import List, Callable, Union, Optional
+from typing import List, Callable, Union, Optional, Literal
 
 # Third-party imports
 from pydantic import BaseModel
+from .util import function_to_json
+
+__CTX_VARS_NAME__ = "context_variables"
 
 AgentFunction = Callable[[], Union[str, "Agent", dict]]
-
 
 class Agent(BaseModel):
     name: str = "Agent"
@@ -18,6 +20,18 @@ class Agent(BaseModel):
     functions: List[AgentFunction] = []
     tool_choice: str = None
     parallel_tool_calls: bool = True
+
+    @property
+    def tools(self):
+        """Returns a list of tool definitons based on the agent's functions."""
+        tools_ = [function_to_json(f) for f in self.functions]
+        for tool in tools_:
+            params = tool["function"]["parameters"]
+            params["properties"].pop(__CTX_VARS_NAME__, None)
+            if __CTX_VARS_NAME__ in params["required"]:
+                params["required"].remove(__CTX_VARS_NAME__)
+        return tools_ if tools_ else None
+
 
 
 class Response(BaseModel):

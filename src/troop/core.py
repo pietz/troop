@@ -2,12 +2,11 @@ import copy
 import inspect
 import json
 from collections import defaultdict
-from typing import List, Union, Any
+from typing import List, Any
 
-from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from .util import function_to_json, debug_print, merge_chunk, run_sync
+from .clients import BaseClient, OpenAIClient
 from .types import (
     Agent,
     AgentFunction,
@@ -23,46 +22,8 @@ __CTX_VARS_NAME__ = "context_variables"
 
 class Troop:
     def __init__(self, client=None):
-        self.client = AsyncOpenAI() if not client else client
-
-    async def aget_chat_completion(
-        self,
-        agent: Agent,
-        history: List,
-        context_variables: dict,
-        model_override: str,
-        stream: bool,
-        debug: bool,
-    ) -> ChatCompletionMessage:
-        context_variables = defaultdict(str, context_variables)
-        instructions = (
-            agent.instructions(context_variables)
-            if callable(agent.instructions)
-            else agent.instructions
-        )
-        messages = [{"role": "system", "content": instructions}] + history
-        debug_print(debug, "Getting chat completion for...:", messages)
-
-        tools = [function_to_json(f) for f in agent.functions]
-        # hide context_variables from model
-        for tool in tools:
-            params = tool["function"]["parameters"]
-            params["properties"].pop(__CTX_VARS_NAME__, None)
-            if __CTX_VARS_NAME__ in params["required"]:
-                params["required"].remove(__CTX_VARS_NAME__)
-
-        create_params = {
-            "model": model_override or agent.model,
-            "messages": messages,
-            "tools": tools or None,
-            "tool_choice": agent.tool_choice,
-            "stream": stream,
-        }
-
-        if tools:
-            create_params["parallel_tool_calls"] = agent.parallel_tool_calls
-
-        return await self.client.chat.completions.create(**create_params)
+        # self.client = AsyncOpenAI() if not client else client
+        self.client: BaseClient = OpenAIClient() if not client else client
 
     async def ahandle_function_result(self, result, debug) -> Result:
         match result:
@@ -168,7 +129,7 @@ class Troop:
             }
 
             # get completion with current history, agent
-            completion = await self.aget_chat_completion(
+            completion = await self.client.aget_chat_completion(
                 agent=active_agent,
                 history=history,
                 context_variables=context_variables,
@@ -255,7 +216,7 @@ class Troop:
 
         while len(history) - init_len < max_turns and active_agent:
             # get completion with current history, agent
-            completion = await self.aget_chat_completion(
+            completion = await self.client.aget_chat_completion(
                 agent=active_agent,
                 history=history,
                 context_variables=context_variables,
@@ -287,27 +248,6 @@ class Troop:
             messages=history[init_len:],
             agent=active_agent,
             context_variables=context_variables,
-        )
-
-    def get_chat_completion(
-        self,
-        agent: Agent,
-        history: List,
-        context_variables: dict,
-        model_override: str,
-        stream: bool,
-        debug: bool,
-    ) -> Union[ChatCompletion, ChatCompletionChunk]:
-        """Synchronous version of aget_chat_completion"""
-        return run_sync(
-            self.aget_chat_completion(
-                agent=agent,
-                history=history,
-                context_variables=context_variables,
-                model_override=model_override,
-                stream=stream,
-                debug=debug,
-            )
         )
 
     def handle_function_result(self, result: Any, debug: bool) -> Result:

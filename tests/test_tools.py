@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import Mock
-from troop import Troop, Agent
-from troop.types import Result
+from troop import Troop, Agent, Result
 from tests.mock_client import MockOpenAIClient, create_mock_response
 import asyncio
 
