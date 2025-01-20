@@ -1,106 +1,26 @@
 import copy
-import inspect
 import json
 from collections import defaultdict
-from typing import List, Any
 
-
-from .util import debug_print, merge_chunk, run_sync
+from .util import merge_chunk, run_sync, debug_print
 from .clients import BaseClient, OpenAIClient
+from .tools import handle_tool_calls
 from .types import (
     Agent,
-    AgentFunction,
-    ChatCompletionMessageToolCall,
-    Function,
     Response,
-    Result,
+    Function,
+    ChatCompletionMessageToolCall,
 )
-
-__CTX_VARS_NAME__ = "context_variables"
 
 
 class Troop:
     def __init__(self, client=None):
-        # self.client = AsyncOpenAI() if not client else client
         self.client: BaseClient = OpenAIClient() if not client else client
-
-    async def ahandle_function_result(self, result, debug) -> Result:
-        match result:
-            case Result() as result:
-                return result
-
-            case Agent() as agent:
-                return Result(
-                    value=json.dumps({"assistant": agent.name}),
-                    agent=agent,
-                )
-            case _:
-                try:
-                    str_result = str(result)  # Try conversion first
-                    return Result(value=str_result)
-                except Exception as e:
-                    error_message = f"Failed to cast response to string: {result}. Make sure agent functions return a string or Result object. Error: {str(e)}"
-                    debug_print(debug, error_message)
-                    raise TypeError(
-                        error_message
-                    ) from e  # Preserve original error chain
-
-    async def ahandle_tool_calls(
-        self,
-        tool_calls: List[ChatCompletionMessageToolCall],
-        functions: List[AgentFunction],
-        context_variables: dict,
-        debug: bool,
-    ) -> Response:
-        function_map = {f.__name__: f for f in functions}
-        partial_response = Response(messages=[], agent=None, context_variables={})
-
-        for tool_call in tool_calls:
-            name = tool_call.function.name
-            # handle missing tool case, skip to next tool
-            if name not in function_map:
-                debug_print(debug, f"Tool {name} not found in function map.")
-                partial_response.messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "tool_name": name,
-                        "content": f"Error: Tool {name} not found.",
-                    }
-                )
-                continue
-            args = json.loads(tool_call.function.arguments)
-            debug_print(debug, f"Processing tool call: {name} with arguments {args}")
-
-            func = function_map[name]
-            # pass context_variables to agent functions
-            if __CTX_VARS_NAME__ in func.__code__.co_varnames:
-                args[__CTX_VARS_NAME__] = context_variables
-            raw_result = (
-                await function_map[name](**args)
-                if inspect.iscoroutinefunction(function_map[name])
-                else function_map[name](**args)
-            )
-
-            result: Result = await self.ahandle_function_result(raw_result, debug)
-            partial_response.messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "tool_name": name,
-                    "content": result.value,
-                }
-            )
-            partial_response.context_variables.update(result.context_variables)
-            if result.agent:
-                partial_response.agent = result.agent
-
-        return partial_response
 
     async def arun_and_stream(
         self,
         agent: Agent,
-        messages: List,
+        messages: list,
         context_variables: dict = {},
         model_override: str = None,
         debug: bool = False,
@@ -171,7 +91,7 @@ class Troop:
                 tool_calls.append(tool_call_object)
 
             # handle function calls, updating context_variables, and switching agents
-            partial_response = await self.ahandle_tool_calls(
+            partial_response = await handle_tool_calls(
                 tool_calls, active_agent.functions, context_variables, debug
             )
             history.extend(partial_response.messages)
@@ -190,7 +110,7 @@ class Troop:
     async def arun(
         self,
         agent: Agent,
-        messages: List,
+        messages: list,
         context_variables: dict = {},
         model_override: str = None,
         stream: bool = False,
@@ -199,7 +119,7 @@ class Troop:
         execute_tools: bool = True,
     ) -> Response:
         if stream:
-            return self.run_and_stream(
+            return await self.arun_and_stream(
                 agent=agent,
                 messages=messages,
                 context_variables=context_variables,
@@ -235,7 +155,7 @@ class Troop:
                 break
 
             # handle function calls, updating context_variables, and switching agents
-            partial_response = await self.ahandle_tool_calls(
+            partial_response = await handle_tool_calls(
                 message.tool_calls, active_agent.functions, context_variables, debug
             )
             history.extend(partial_response.messages)
@@ -249,31 +169,10 @@ class Troop:
             context_variables=context_variables,
         )
 
-    def handle_function_result(self, result: Any, debug: bool) -> Result:
-        """Synchronous version of ahandle_function_result"""
-        return run_sync(self.ahandle_function_result(result, debug))
-
-    def handle_tool_calls(
-        self,
-        tool_calls: List[ChatCompletionMessageToolCall],
-        functions: List[AgentFunction],
-        context_variables: dict,
-        debug: bool,
-    ) -> Response:
-        """Synchronous version of ahandle_tool_calls"""
-        return run_sync(
-            self.ahandle_tool_calls(
-                tool_calls=tool_calls,
-                functions=functions,
-                context_variables=context_variables,
-                debug=debug,
-            )
-        )
-
     def run_and_stream(
         self,
         agent: Agent,
-        messages: List,
+        messages: list,
         context_variables: dict = {},
         model_override: str = None,
         debug: bool = False,
@@ -301,7 +200,7 @@ class Troop:
     def run(
         self,
         agent: Agent,
-        messages: List,
+        messages: list,
         context_variables: dict = {},
         model_override: str = None,
         stream: bool = False,

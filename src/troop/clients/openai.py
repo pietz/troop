@@ -6,6 +6,7 @@ from openai.types.chat import ChatCompletionMessage
 from .base import BaseClient
 from ..types import Agent
 
+
 class OpenAIClient(BaseClient):
     def __init__(self):
         self.client = AsyncOpenAI()
@@ -34,5 +35,4 @@ class OpenAIClient(BaseClient):
             tools=agent.tools,
             stream=stream,
             tool_choice=agent.tool_choice,
-            parallel_tool_calls=agent.parallel_tool_calls,
         )
