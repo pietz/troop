@@ -5,6 +5,7 @@ from openai.types.chat import ChatCompletionMessage
 
 from .base import BaseClient
 from ..types import Agent
+from ..tools import functions_to_tools
 
 
 class OpenAIClient(BaseClient):
@@ -32,7 +33,7 @@ class OpenAIClient(BaseClient):
         return await self.client.chat.completions.create(
             model=model_override or agent.model,
             messages=messages,
-            tools=agent.tools,
+            tools=functions_to_tools(agent.functions),
             stream=stream,
             tool_choice=agent.tool_choice,
         )

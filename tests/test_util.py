@@ -1,4 +1,4 @@
-from troop.util import function_to_json
+from troop.tools import function_to_json
 
 
 def test_basic_function():

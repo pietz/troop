@@ -1,5 +1,13 @@
-from troop.types import ChatCompletionMessage, ChatCompletionMessageToolCall, Function, Agent
-from openai.types.chat.chat_completion import ChatCompletion, Choice
+from troop.types import Agent
+from openai.types.chat.chat_completion import (
+    ChatCompletion,
+    Choice,
+    ChatCompletionMessage,
+)
+from openai.types.chat.chat_completion_message_tool_call import (
+    ChatCompletionMessageToolCall,
+    Function,
+)
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from troop.clients.base import BaseClient
 import json
@@ -72,6 +80,7 @@ class MockOpenAIClient(BaseClient):
         debug: bool,
     ) -> ChatCompletion:
         from troop.util import debug_print
+
         debug_print(debug, "Getting chat completion")
         if stream:
             if self.responses:
@@ -157,12 +166,12 @@ class MockOpenAIClient(BaseClient):
                         function_calls=[{"name": "bad_function"}],
                     )
                 raise RuntimeError("No more responses in sequence")
-        
+
         if self.response:
             response = self.response
             debug_print(debug, "Received completion:", response.choices[0].message)
             return response
-            
+
         raise RuntimeError("No response set")
 
     def assert_create_called_with(self, **kwargs):

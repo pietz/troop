@@ -5,6 +5,7 @@ from openai.types.chat import ChatCompletionMessage
 
 from .base import BaseClient
 from ..types import Agent
+from ..tools import functions_to_tools
 
 
 class AnthropicClient(BaseClient):
@@ -30,6 +31,6 @@ class AnthropicClient(BaseClient):
             model=model_override or agent.model,
             system=instructions,
             messages=history,
-            tools=agent.tools,
+            tools=functions_to_tools(agent.functions),
             stream=stream,
         )

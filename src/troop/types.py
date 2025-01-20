@@ -1,12 +1,12 @@
 import json
 from openai.types.chat.chat_completion_message_tool_call import (
     ChatCompletionMessageToolCall,
+    Function,
 )
 from typing import List, Callable, Union, Optional
 
 # Third-party imports
 from pydantic import BaseModel
-from .tools import function_to_json
 
 __CTX_VARS_NAME__ = "context_variables"
 
@@ -20,18 +20,6 @@ class Agent(BaseModel):
     functions: List[AgentFunction] = []
     tool_choice: str = None
     parallel_tool_calls: bool = True
-
-    @property
-    def tools(self):
-        """Returns a list of tool definitons based on the agent's functions."""
-        tools_ = []
-        for f in self.functions:
-            tool = function_to_json(f)
-            params = tool["function"]["parameters"]
-            params["properties"].pop(__CTX_VARS_NAME__, None)
-            if __CTX_VARS_NAME__ in params["required"]:
-                params["required"].remove(__CTX_VARS_NAME__)
-        return tools_ if tools_ else None
 
 
 class Response(BaseModel):
@@ -67,10 +55,10 @@ class Result(BaseModel):
                 )
             case _:
                 try:
-                    str_result = str(result)  # Try conversion first
+                    str_result = str(raw_result)  # Try conversion first
                     return Result(value=str_result)
                 except Exception as e:
-                    error_message = f"Failed to cast response to string: {result}. Make sure agent functions return a string or Result object. Error: {str(e)}"
+                    error_message = f"Failed to cast response to string: {raw_result}. Make sure agent functions return a string or Result object. Error: {str(e)}"
                     raise TypeError(
                         error_message
                     ) from e  # Preserve original error chain

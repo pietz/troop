@@ -1,6 +1,10 @@
 # Troop
 
-A lightweight framework for multi-agent orchestration, forked from OpenAI's Swarm library.
+A simple and lightweight framework for multi-agent orchestration, forked from OpenAI's Swarm library.
+
+There are many great and powerful LLM agent libraries out there. troop is trying to become a simple, flexible and production-ready alternative that let's you focus on your projects instead of spending time on learning complex tools.
+
+OpenAI and Anthropic have both shared their thoughts on what 
 
 ## Install
 
@@ -11,6 +15,8 @@ pip install git+https://github.com/pietz/troop.git
 ```
 
 ## Usage
+
+Currently, `troop` is a drop-in replacement for `swarm` from OpenAI. Change the imports and your existing code should work. While I want to try to keep it this way, future features might introduce breaking changes.
 
 ```python
 from troop import Troop, Agent
