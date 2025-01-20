@@ -1,15 +1,12 @@
-# Standard library imports
 import copy
 import inspect
 import json
 from collections import defaultdict
 from typing import List, Union, Any
 
-# Package/library imports
-from openai import OpenAI, AsyncOpenAI
+from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
-# Local imports
 from .util import function_to_json, debug_print, merge_chunk, run_sync
 from .types import (
     Agent,
@@ -25,13 +22,8 @@ __CTX_VARS_NAME__ = "context_variables"
 
 
 class Troop:
-    def __init__(self, client=None, async_client=None):
-        if not client:
-            client = OpenAI()
-        if not async_client:
-            async_client = AsyncOpenAI()
-        self.client = client
-        self.async_client = async_client
+    def __init__(self, client=None):
+        self.client = AsyncOpenAI() if not client else client
 
     async def aget_chat_completion(
         self,
@@ -70,7 +62,7 @@ class Troop:
         if tools:
             create_params["parallel_tool_calls"] = agent.parallel_tool_calls
 
-        return await self.async_client.chat.completions.create(**create_params)
+        return await self.client.chat.completions.create(**create_params)
 
     async def ahandle_function_result(self, result, debug) -> Result:
         match result:
@@ -89,7 +81,9 @@ class Troop:
                 except Exception as e:
                     error_message = f"Failed to cast response to string: {result}. Make sure agent functions return a string or Result object. Error: {str(e)}"
                     debug_print(debug, error_message)
-                    raise TypeError(error_message) from e  # Preserve original error chain
+                    raise TypeError(
+                        error_message
+                    ) from e  # Preserve original error chain
 
     async def ahandle_tool_calls(
         self,
@@ -122,7 +116,11 @@ class Troop:
             # pass context_variables to agent functions
             if __CTX_VARS_NAME__ in func.__code__.co_varnames:
                 args[__CTX_VARS_NAME__] = context_variables
-            raw_result = await function_map[name](**args) if inspect.iscoroutinefunction(function_map[name]) else function_map[name](**args)
+            raw_result = (
+                await function_map[name](**args)
+                if inspect.iscoroutinefunction(function_map[name])
+                else function_map[name](**args)
+            )
 
             result: Result = await self.ahandle_function_result(raw_result, debug)
             partial_response.messages.append(
@@ -353,7 +351,7 @@ class Troop:
             max_turns=max_turns,
             execute_tools=execute_tools,
         )
-        
+
         # Convert async generator to sync generator
         while True:
             try:
