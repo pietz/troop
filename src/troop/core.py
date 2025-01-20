@@ -1,6 +1,7 @@
 import copy
 import json
 from collections import defaultdict
+from typing import AsyncGenerator
 
 from .util import merge_chunk, run_sync, debug_print
 from .clients import BaseClient, OpenAIClient
@@ -117,9 +118,26 @@ class Troop:
         debug: bool = False,
         max_turns: int = float("inf"),
         execute_tools: bool = True,
-    ) -> Response:
+    ) -> Response | AsyncGenerator:
+        """
+        Run the agent asynchronously.
+        
+        Args:
+            agent: The agent to run
+            messages: The message history
+            context_variables: Variables available to the agent
+            model_override: Override the agent's model
+            stream: If True, return an AsyncGenerator that yields chunks
+            debug: Enable debug logging
+            max_turns: Maximum number of turns
+            execute_tools: Whether to execute tool calls
+            
+        Returns:
+            Response if stream=False
+            AsyncGenerator if stream=True
+        """
         if stream:
-            return await self.arun_and_stream(
+            return self.arun_and_stream(
                 agent=agent,
                 messages=messages,
                 context_variables=context_variables,

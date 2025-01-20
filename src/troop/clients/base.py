@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import AsyncGenerator
 
 from openai.types.chat import ChatCompletionMessage
 
@@ -16,7 +17,7 @@ class BaseClient(ABC):
         model_override: str,
         stream: bool,
         debug: bool,
-    ) -> ChatCompletionMessage:
+    ) -> ChatCompletionMessage | AsyncGenerator:
         pass
 
     def get_chat_completion(
