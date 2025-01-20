@@ -1,4 +1,3 @@
-from unittest.mock import MagicMock
 from troop.types import ChatCompletionMessage, ChatCompletionMessageToolCall, Function, Agent
 from openai.types.chat.chat_completion import ChatCompletion, Choice
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk

@@ -5,12 +5,11 @@ from collections import defaultdict
 from typing import List, Any
 
 
-from .util import function_to_json, debug_print, merge_chunk, run_sync
+from .util import debug_print, merge_chunk, run_sync
 from .clients import BaseClient, OpenAIClient
 from .types import (
     Agent,
     AgentFunction,
-    ChatCompletionMessage,
     ChatCompletionMessageToolCall,
     Function,
     Response,
