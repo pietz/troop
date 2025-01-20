@@ -34,7 +34,7 @@ def test_model_override(mock_openai_client):
         )
     )
     
-    troop = Troop(client=mock_openai_client, async_client=mock_openai_client)
+    troop = Troop(client=mock_openai_client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Hi"}],
@@ -63,7 +63,7 @@ def test_tool_choice():
         create_mock_response({"role": "assistant", "content": "Done"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Do something"}]
@@ -91,7 +91,7 @@ def test_tool_choice_auto():
         create_mock_response({"role": "assistant", "content": "Done"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Do something"}]
@@ -115,7 +115,7 @@ def test_tool_choice_none():
         create_mock_response({"role": "assistant", "content": "No tools used"})
     )
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Do something"}]
@@ -139,7 +139,7 @@ async def test_callable_instructions():
         create_mock_response({"role": "assistant", "content": "Hello Alice!"})
     )
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = await troop.arun(
         agent=agent,
         messages=[{"role": "user", "content": "Hi"}],
@@ -177,7 +177,7 @@ def test_nested_agent_switches():
         create_mock_response({"role": "assistant", "content": "Done"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent1,
         messages=[{"role": "user", "content": "Switch twice"}]

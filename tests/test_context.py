@@ -32,7 +32,7 @@ def test_context_variables():
         create_mock_response({"role": "assistant", "content": "Greeting sent!"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Say hi"}],
@@ -65,7 +65,7 @@ def test_context_updates_from_multiple_tools():
         create_mock_response({"role": "assistant", "content": "Done"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Run both tools"}]
@@ -95,7 +95,7 @@ def test_context_persistence_across_turns():
         create_mock_response({"role": "assistant", "content": "Second turn"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     
     # First turn
     response = troop.run(
@@ -135,7 +135,7 @@ def test_context_with_agent_switch():
         create_mock_response({"role": "assistant", "content": "Switched"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Switch agent"}],
@@ -176,7 +176,7 @@ def test_context_in_nested_tool_calls():
         create_mock_response({"role": "assistant", "content": "Done"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Run nested tools"}],
@@ -212,7 +212,7 @@ def test_context_with_parallel_tools():
         create_mock_response({"role": "assistant", "content": "Done"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Run parallel tools"}]

@@ -20,7 +20,7 @@ async def test_streaming():
         create_mock_response({"role": "assistant", "content": "Hello there!"})
     )
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     agent = Agent()
     messages = [{"role": "user", "content": "Hi"}]
     
@@ -52,7 +52,7 @@ async def test_streaming_with_tool_calls():
         create_mock_response({"role": "assistant", "content": "Final response"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     tool_call_seen = False
     final_response_seen = False
     
@@ -87,7 +87,7 @@ async def test_streaming_with_context_updates():
         create_mock_response({"role": "assistant", "content": "Final response"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     context_updated = False
     final_chunk_seen = False
     
@@ -120,7 +120,7 @@ async def test_streaming_with_agent_switch():
         create_mock_response({"role": "assistant", "content": "Response from new agent"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     agent_switched = False
     final_response_seen = False
     
@@ -152,7 +152,7 @@ async def test_streaming_error_handling():
         )
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     error_seen = False
     
     try:

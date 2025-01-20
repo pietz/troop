@@ -18,7 +18,7 @@ def mock_openai_client():
 def test_run_with_simple_message(mock_openai_client):
     agent = Agent()
     # set up client and run
-    client = Troop(client=mock_openai_client, async_client=mock_openai_client)
+    client = Troop(client=mock_openai_client)
     messages = [{"role": "user", "content": "Hello, how are you?"}]
     response = client.run(agent=agent, messages=messages)
 
@@ -31,7 +31,7 @@ def test_run_with_simple_message(mock_openai_client):
 async def test_async_run_with_simple_message(mock_openai_client):
     agent = Agent()
     # set up client and run
-    client = Troop(client=mock_openai_client, async_client=mock_openai_client)
+    client = Troop(client=mock_openai_client)
     messages = [{"role": "user", "content": "Hello, how are you?"}]
     response = await client.arun(agent=agent, messages=messages)
 
@@ -59,7 +59,7 @@ def test_max_turns():
         create_mock_response({"role": "assistant", "content": "Final message"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Start"}],
@@ -97,7 +97,7 @@ def test_execute_tools_false(mock_openai_client):
     )
 
     # set up client and run
-    client = Troop(client=mock_openai_client, async_client=mock_openai_client)
+    client = Troop(client=mock_openai_client)
     response = client.run(agent=agent, messages=messages, execute_tools=False)
 
     # assert tool call is present in last response
@@ -125,7 +125,7 @@ def test_debug_mode(capsys):
         create_mock_response({"role": "assistant", "content": "Done"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Test debug"}],

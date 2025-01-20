@@ -48,7 +48,7 @@ def test_tool_call(mock_openai_client):
     )
 
     # set up client and run
-    client = Troop(client=mock_openai_client, async_client=mock_openai_client)
+    client = Troop(client=mock_openai_client)
     response = client.run(agent=agent, messages=messages)
 
     get_weather_mock.assert_called_once_with(location=expected_location)
@@ -85,7 +85,7 @@ async def test_concurrent_tool_calls():
         create_mock_response({"role": "assistant", "content": "All tasks complete"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     
     # Time the execution
     start = asyncio.get_event_loop().time()
@@ -117,7 +117,7 @@ async def test_tool_error_handling():
         )
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     
     with pytest.raises(ValueError, match="Tool execution failed"):
         await troop.arun(
@@ -158,7 +158,7 @@ async def test_tool_result_types():
         create_mock_response({"role": "assistant", "content": "Done"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = await troop.arun(
         agent=agent,
         messages=[{"role": "user", "content": "Test returns"}]
@@ -185,7 +185,7 @@ def test_invalid_tool_arguments():
         create_mock_response({"role": "assistant", "content": "Done"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     with pytest.raises(TypeError):
         troop.run(
             agent=agent,
@@ -205,7 +205,7 @@ def test_error_handling_missing_tool():
         create_mock_response({"role": "assistant", "content": "Done"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Call missing function"}]
@@ -233,7 +233,7 @@ def test_function_return_result_object():
         create_mock_response({"role": "assistant", "content": "Done"})
     ])
     
-    troop = Troop(client=client, async_client=client)
+    troop = Troop(client=client)
     response = troop.run(
         agent=agent,
         messages=[{"role": "user", "content": "Run complex function"}]
