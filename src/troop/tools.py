@@ -120,15 +120,15 @@ def function_to_json(func) -> dict:
     }
 
 def functions_to_tools(functions: list[AgentFunction]) -> list[dict]:
-        """Returns a list of tool definitons based on the agent's functions."""
-        tools_ = []
-        for f in functions:
-            tool = function_to_json(f)
-            params = tool["function"]["parameters"]
-            params["properties"].pop(__CTX_VARS_NAME__, None)
-            if __CTX_VARS_NAME__ in params["required"]:
-                params["required"].remove(__CTX_VARS_NAME__)
-        return tools_ if tools_ else None
+    """Returns a list of tool definitons based on the agent's functions."""
+    tools_ = []
+    for f in functions:
+        tool = function_to_json(f)
+        params = tool["function"]["parameters"]
+        params["properties"].pop(__CTX_VARS_NAME__, None)
+        if __CTX_VARS_NAME__ in params["required"]:
+            params["required"].remove(__CTX_VARS_NAME__)
+    return tools_ if tools_ else None
 
 def handle_function_result(result, debug) -> Result:
     match result:
