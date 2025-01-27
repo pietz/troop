@@ -30,10 +30,14 @@ class OpenAIClient(BaseClient):
 
         messages = [{"role": "system", "content": instructions}] + history
 
+        tools = functions_to_tools(agent.functions)
+
+        print(tools)
+
         return await self.client.chat.completions.create(
             model=model_override or agent.model,
             messages=messages,
-            tools=functions_to_tools(agent.functions),
+            tools=tools,
             stream=stream,
             tool_choice=agent.tool_choice,
         )
