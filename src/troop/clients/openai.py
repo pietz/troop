@@ -32,8 +32,6 @@ class OpenAIClient(BaseClient):
 
         tools = functions_to_tools(agent.functions)
 
-        print(tools)
-
         return await self.client.chat.completions.create(
             model=model_override or agent.model,
             messages=messages,

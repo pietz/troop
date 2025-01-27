@@ -128,6 +128,7 @@ def functions_to_tools(functions: list[AgentFunction]) -> list[dict]:
         params["properties"].pop(__CTX_VARS_NAME__, None)
         if __CTX_VARS_NAME__ in params["required"]:
             params["required"].remove(__CTX_VARS_NAME__)
+        tools_.append(tool)
     return tools_ if tools_ else None
 
 def handle_function_result(result, debug) -> Result:
