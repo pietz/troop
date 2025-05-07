@@ -1,15 +1,13 @@
-from typing import Annotated
-
-import typer
-from rich import print as rprint
+from typer import Typer, Option, Argument, prompt
+from rich.console import Console
 from pydantic_ai import Agent
-from pydantic_ai.mcp import MCPServerStdio
 
 from .commands import keys_app, servers_app, agents_app, models_app
 from .utils import run_async, get_servers
 from .config import settings
 
-app = typer.Typer()
+app = Typer()
+console = Console()
 
 app.add_typer(keys_app, name="keys")
 app.add_typer(servers_app, name="servers")
@@ -17,12 +15,12 @@ app.add_typer(agents_app, name="agents")
 app.add_typer(models_app, name="models")
 
 
-@app.command()
+@app.command("prompt")
 @run_async
-async def prompt(
-    message: str = typer.Argument(help="The message to send to the agent"),
-    agent: str = typer.Option(None, help="The name of the agent"),
-    model: str = typer.Option(None, help="The LLM model to use"),
+async def prompt_agent(
+    message: str = Argument(help="The message to send to the agent"),
+    agent: str = Option(None, help="The name of the agent"),
+    model: str = Option(None, help="The LLM model to use"),
 ):
     """Run a single prompt against an agent."""
     if not agent:
@@ -33,14 +31,14 @@ async def prompt(
     async with llm.run_mcp_servers():
         async with llm.run_stream(message) as result:
             async for chunk in result.stream_text(delta=True):
-                rprint(chunk, sep="", end="")
+                console.print(chunk, sep="", end="")
 
 
-@app.command()
+@app.command("chat")
 @run_async
-async def chat(
-    agent: str = typer.Option(None, help="The name of the agent"),
-    model: str = typer.Option(None, help="The LLM model to use"),
+async def chat_agent(
+    agent: str = Option(None, help="The name of the agent"),
+    model: str = Option(None, help="The LLM model to use"),
 ):
     """Start an interactive chat session."""
     agent = agent if agent else settings.agent
@@ -53,11 +51,12 @@ async def chat(
     messages = []
 
     while True:
-        message = typer.prompt("User", type=str)
+        console.print("[bold blue]User:[/bold blue] ", sep="", end="")
+        message = prompt("", type=str, prompt_suffix="")
         async with llm.run_mcp_servers():
             async with llm.run_stream(message, message_history=messages) as result:
-                rprint("Agent: ", sep="", end="")
+                console.print("[bold green]Agent:[/bold green] ", sep="", end="")
                 async for chunk in result.stream_text(delta=True):
-                    rprint(chunk, sep="", end="")
-                rprint()
+                    console.print(chunk, sep="", end="")
+                console.print()
                 messages += result.new_messages()

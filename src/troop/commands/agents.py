@@ -18,7 +18,7 @@ def list_agents():
     for name, agent in settings.agents.items():
         table.add_row(
             name,
-            agent["instructions"][:20] + "...",
+            agent["instructions"][:30] + "...",
             ", ".join(agent["servers"]),
         )
 
