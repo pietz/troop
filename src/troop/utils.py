@@ -1,8 +1,10 @@
 import os
 import asyncio
-from contextlib import asynccontextmanager
 from functools import wraps
+from contextlib import asynccontextmanager
+
 from pydantic_ai.mcp import MCPServerStdio
+from rich.panel import Panel
 
 
 def run_async(f):
