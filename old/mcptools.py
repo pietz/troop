@@ -5,7 +5,7 @@ from mcp.types import Tool as MCPTool
 from pydantic_ai import RunContext, Tool
 from pydantic_ai.tools import ToolDefinition
 
-async def mcpprompt(session: ClientSession) -> str:
+async def get_prompt(session: ClientSession) -> str:
     prompts = (await session.list_prompts()).prompts
     if len(prompts) != 1:
         raise ValueError("Expected exactly one prompt")
@@ -23,7 +23,7 @@ async def mcpprompt(session: ClientSession) -> str:
     
 
 
-async def mcptools(session: ClientSession) -> list[Tool]:
+async def get_tools(session: ClientSession) -> list[Tool]:
     tools = (await session.list_tools()).tools
     return [_initialize_tool(session, tool) for tool in tools]
 

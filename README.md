@@ -1,128 +1,136 @@
-# Troop
+# troop
 
-A simple CLI for interacting with LLMs through chat completions.
+Build your own troop of agents right from the CLI.
 
-## Installation
+## Intro
 
-You can install Troop directly from the repository:
+troop is a lightweight command line tool based on [PydanticAI](https://ai.pydantic.dev/), the [Model Context Protocol](https://modelcontextprotocol.io) (MCP) and [Typer](https://typer.tiangolo.com). It allows you to setup and configure your own agents in minutes, while using industry standard frameworks under the hood.
 
-```bash
-pip install git+https://github.com/username/troop.git
-```
+In Troop we define agents as:
 
-Or if you've cloned the repository:
+> Agent = LLM + Instructions + Tools
 
-```bash
-pip install -e .
-```
+## Quickstart
 
-## Configuration
-
-Troop requires an OpenAI API key to function. You can provide it in two ways:
-
-1. Set the `OPENAI_API_KEY` environment variable:
-   ```bash
-   export OPENAI_API_KEY=your-api-key-here
-   ```
-
-2. Pass it as an option when running commands:
-   ```bash
-   troop --api-key=your-api-key-here chat "Hello there"
-   ```
-
-## Usage
-
-### Single Message
-
-Send a single message to the LLM and get a response:
+We recommend using `uv` to install troop.
 
 ```bash
-troop chat "What is the capital of France?"
+uv tool install troop
 ```
 
-Options:
-- `--temperature`: Control randomness (0.0 = deterministic, 1.0 = creative)
-- `--system-prompt`: Custom system prompt to use
-- `--model`: LLM model to use (default: "gpt-4o")
-- `--api-key`: OpenAI API key (if not set in environment)
-
-### Interactive Chat
-
-Start an interactive chat session:
+Add an API key for your favorite LLM provider. Since `troop` is based on PydanticAI, we support all of [these](https://ai.pydantic.dev/models/).
 
 ```bash
-troop interactive
+troop key add openai <your-api-key>
 ```
 
-The interactive mode maintains conversation history, allowing for more contextual interactions. Type 'exit' or 'quit' to end the session, or press Ctrl+C.
+The `troop` default agent has access to tools for searching the web and loading content.
 
-Options:
-- `--temperature`: Control randomness for responses
-- `--system-prompt`: Custom system prompt to use
-- `--model`: LLM model to use (default: "gpt-4o")
-- `--api-key`: OpenAI API key (if not set in environment)
-
-### Process Files
-
-Process a file with instructions:
+> The first time you run troop, it will ask you to set a default model. You can also do this manually by running `troop model set openai:gpt-4o`.
 
 ```bash
-troop file path/to/code.py "Explain what this code does"
+troop "What's the weather like in San Fransisco?"
+
+# Assistant: It's a sunny day with low winds at 78°F.
 ```
 
-Options:
-- `--temperature`: Control randomness for the response
-- `--system-prompt`: Custom system prompt to use
-- `--model`: LLM model to use (default: "gpt-4o")
-- `--api-key`: OpenAI API key (if not set in environment)
-
-## Examples
+Instead of stopping after a single iteration, we can also continue in an interactive chat mode.
 
 ```bash
-# Get a concise answer with low temperature
-troop chat --temperature=0.2 "Summarize the key points of quantum computing"
+troop chat
 
-# Use a different model
-troop --model="gpt-3.5-turbo" chat "Write a haiku about coding"
-
-# Custom system prompt for specific tasks
-troop chat --system-prompt="You are a Python expert" "How do I use decorators?"
-
-# Interactive session with a coding assistant
-troop interactive --system-prompt="You are an expert programmer. Provide code examples when appropriate."
-
-# Analyze a file
-troop file app.js "Identify potential bugs and suggest improvements"
+# > User: _
 ```
 
-## Using as a Library
+## Servers
 
-You can use Troop as a library in your Python code:
+We use MCP servers to provide tools to our agents. You can write your own or use existing ones and run them both locally or remotely.
 
-```python
-from troop.llm import ChatClient
+```bash
+troop server add
 
-# Initialize the client
-client = ChatClient(model="gpt-4o", api_key="your-api-key-here")
+# Name: _
 
-# Send a message
-response = client.send_message("Hello, how are you?")
-print(response)
+# Command: <enter> to skip
 
-# Send multiple messages in a conversation
-response1 = client.send_message("What is machine learning?")
-print(response1)
+# Env name & value: <enter> to skip
+```
 
-response2 = client.send_message("Can you provide a simple example?")
-print(response2)  # The client maintains conversation history
+Registered servers can be removed like this:
 
-# Clear conversation history
-client.reset_history()
+```bash
+troop server remove <name>
+```
 
-# Use a custom system prompt
-response = client.send_message(
-    "Explain quantum computing",
-    system_prompt="Explain concepts as if to a 10-year-old child",
-    temperature=0.3
-)
-print(response)
+### Agents
+
+An agent in `troop` is defined by a name, an instruction text (system prompt) and a list of registered servers. The agent will be able to access all of the provided MCP servers and their tools at runtime.
+
+```bash
+troop agent add
+
+# Enter name: _
+
+# Enter model: openai:gpt-4o
+
+# Enter instructions: <enter> to skip
+
+# Add a server: <enter> to skip
+```
+
+This is how you run troop with a specific agent:
+
+```bash
+troop --agent <name> <query>
+```
+
+This is how you remove registered agents.
+
+```bash
+troop agent remove <name>
+```
+
+This is how you set an agent as the default choice:
+
+```bash
+troop agent set <name>
+```
+
+## Settings
+
+Troop stores a global config YAML file in the user directory. On macOS it will be stored under ~/.troop/config.yaml and it looks like this:
+
+```yaml
+keys:
+  openai: sk-proj-vBAU...
+  anthropic: IRvjU...
+  google: AIzaS...
+servers:
+  web_tools:
+    command:
+    - mcp-proxy
+    - https://mcp-tools.up.railway.app/sse
+    env: {}
+agents:
+  assistant:
+    instructions: You're a helpful assistant with access to tools.
+    servers:
+    - web_tools
+defaults:
+  model: openai:gpt-4o
+  agent: assistant
+    
+```
+
+## Best Practices
+
+### System Instructions vs. Tool Descriptions
+
+When defining agents and their tools, you might come across the question:
+
+> What should I describe in the instructions and what should I put in the tool description?
+
+A pattern that works well is this:
+
+- Tool Description: Explain what the tools does, what it returns and **HOW** it needs to be used on a technical level. There shouldn't be any mentions of other tools or servers.
+- System Instructions: Explain **WHEN** and in what situation a tool should be used or favored over another. Focus on the overall process the agent will go through.
