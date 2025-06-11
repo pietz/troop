@@ -9,7 +9,7 @@ Troop is a modern LLM agent framework built on top of [PydanticAI](https://ai.py
 ```bash
 troop researcher -p "Any music events in Paris tonight?"
 
-> There are multiple music events in Paris tonight depending...
+Researcher: There are multiple music events in Pari...
 ```
 
 Think of troop as a generalized version of Claude Code, that allows you to build and use all kinds of useful agents based on any LLM you like.
