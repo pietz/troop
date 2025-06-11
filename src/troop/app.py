@@ -2,64 +2,82 @@ import typer
 from rich.console import Console
 from pydantic_ai import Agent
 
-from .commands import keys_app, servers_app, agents_app, models_app
+from .commands import provider_app, mcp_app, agent_app
 from .utils import run_async, get_servers
-from .config import settings
+from .config import settings, RESERVED_NAMES
 
-app = typer.Typer()
 console = Console()
 
-app.add_typer(keys_app, name="keys")
-app.add_typer(servers_app, name="servers")
-app.add_typer(agents_app, name="agents")
-app.add_typer(models_app, name="models")
+
+async def stream_response(result, agent_name: str):
+    """Stream response chunks to console"""
+    console.print(f"[bold green]{agent_name.capitalize()}:[/bold green] ", sep="", end="")
+    async for chunk in result.stream_text(delta=True):
+        console.print(chunk, sep="", end="")
+    console.print()  # Newline after full response
+    console.print()  # Add blank line after agent response
 
 
-@app.command()
-@run_async
-async def prompt(
-    message: str = typer.Argument(help="The message to send to the agent"),
-    agent: str = typer.Option(None, help="The name of the agent"),
-    model: str = typer.Option(None, help="The LLM model to use"),
-):
-    """Run a single prompt against an agent."""
-    if not agent:
-        agent = settings.agent
-    if not model:
-        model = settings.model
-    llm = Agent(model=model, mcp_servers=get_servers(settings, agent))
-    async with llm.run_mcp_servers():
-        async with llm.run_stream(message) as result:
-            async for chunk in result.stream_text(delta=True):
-                console.print(chunk, sep="", end="")
+def create_agent_command(agent_name: str):
+    """Create a command function for a specific agent"""
+    @run_async
+    async def agent_command(
+        prompt: str = typer.Option(None, "-p", "--prompt", help="Single prompt to send to the agent"),
+        model: str = typer.Option(None, "-m", "--model", help="Override the default model"),
+    ):
+        # Use provided model or agent's default
+        agent_config = settings.agents[agent_name]
+        model = model or agent_config.get("model")
+        
+        if not model:
+            console.print(f"[red]Error:[/red] No model specified for agent '{agent_name}'")
+            return
+        
+        # Create agent
+        llm = Agent(
+            model=model,
+            system_prompt=agent_config["instructions"],
+            mcp_servers=get_servers(settings, agent_name),
+        )
+        
+        if prompt:
+            # Single prompt mode
+            async with llm.run_mcp_servers():
+                async with llm.run_stream(prompt) as result:
+                    await stream_response(result, agent_name)
+        else:
+            # Interactive chat mode (default)
+            messages = []
+            
+            console.print(f"[bold]Starting chat with {agent_name}[/bold]")
+            console.print("[dim]Type 'exit' or 'quit' to end the conversation[/dim]\n")
+            
+            async with llm.run_mcp_servers():
+                while True:
+                    console.print("[bold blue]User:[/bold blue] ", sep="", end="")
+                    message = typer.prompt("", type=str, prompt_suffix="")
+                    
+                    if message.lower() in ["exit", "quit"]:
+                        break
+                    
+                    console.print()  # Add blank line after user input
+                    async with llm.run_stream(message, message_history=messages) as result:
+                        await stream_response(result, agent_name)
+                        messages += result.new_messages()
+    
+    return agent_command
 
 
-@app.command()
-@run_async
-async def chat(
-    agent: str = typer.Option(None, help="The name of the agent"),
-    model: str = typer.Option(None, help="The LLM model to use"),
-):
-    """Start an interactive chat session."""
-    agent = agent if agent else settings.agent
-    model = model if model else settings.model
-    llm = Agent(
-        model=model,
-        system_prompt=settings.agents[agent]["instructions"],
-        mcp_servers=get_servers(settings, agent),
-    )
-    messages = []
+app = typer.Typer()
 
-    while True:
-        console.print("[bold blue]User:[/bold blue] ", sep="", end="")
-        message = typer.prompt("", type=str, prompt_suffix="")
+# Add static command groups
+app.add_typer(provider_app, name="provider")
+app.add_typer(mcp_app, name="mcp")
+app.add_typer(agent_app, name="agent")
 
-        # await stream_with_tools(llm, message, messages)
+# Dynamically add agent commands at startup
+for agent_name in settings.agents:
+    if agent_name not in RESERVED_NAMES:
+        app.command(name=agent_name)(create_agent_command(agent_name))
 
-        async with llm.run_mcp_servers():
-            async with llm.run_stream(message, message_history=messages) as result:
-                console.print("[bold green]Agent:[/bold green] ", sep="", end="")
-                async for chunk in result.stream_text(delta=True):
-                    console.print(chunk, sep="", end="")
-                console.print()
-                messages += result.new_messages()
+

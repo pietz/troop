@@ -1,4 +1,3 @@
-from .keys import app as keys_app
-from .servers import app as servers_app
-from .agents import app as agents_app
-from .models import app as models_app
+from .provider import app as provider_app
+from .mcp import app as mcp_app
+from .agent import app as agent_app

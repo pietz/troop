@@ -53,8 +53,8 @@ def get_servers(settings, agent_name: str):
     for s in settings.agents[agent_name]["servers"]:
         servers.append(
             QuietMCPServer(
-                command=settings.servers[s]["command"][0],
-                args=settings.servers[s]["command"][1:],
+                command=settings.mcps[s]["command"][0],
+                args=settings.mcps[s]["command"][1:],
             )
         )
     return servers

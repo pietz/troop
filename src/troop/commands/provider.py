@@ -4,7 +4,7 @@ from rich.table import Table
 
 from ..config import settings
 
-app = typer.Typer(name="keys", help="Manage API keys. (list/add/remove)")
+app = typer.Typer(name="provider", help="Manage API keys for LLM providers. (list/add/remove)")
 
 
 @app.command("list")
@@ -14,7 +14,7 @@ def list_keys():
     table.add_column("Provider", justify="left")
     table.add_column("Key", justify="left")
 
-    for provider, key in settings.keys.items():
+    for provider, key in settings.providers.items():
         table.add_row(provider, f"{key[:6]}...{key[-6:]}")
 
     rprint(table)
@@ -22,19 +22,19 @@ def list_keys():
 
 @app.command("add")
 def add_key(
-    provider: str = typer.Argument(None, help="Name of the LLM provider"),
-    key: str = typer.Option(None, hide_input=True, help="API Key"),
+    provider: str = typer.Argument(None, help="Provider name/ID (e.g., openai, anthropic)"),
+    key: str = typer.Option(None, "--api-key", hide_input=True, help="API Key"),
 ):
     """Add or replace the API key for a specific provider"""
     if not provider:
-        provider = typer.prompt("Provider")
+        provider = typer.prompt("Enter provider name/ID")
     if not key:
-        key = typer.prompt("API Key", hide_input=True)
+        key = typer.prompt("Enter API key", hide_input=True)
     confirm = True
-    if provider in settings.keys:
+    if provider in settings.providers:
         confirm = typer.confirm(f"Provider {provider} already exists. Overwrite it?")
     if confirm:
-        settings.keys[provider] = key
+        settings.providers[provider] = key
         settings.save()
         rprint(f"Added API key for {provider}")
 
@@ -44,8 +44,8 @@ def remove_key(provider: str = typer.Argument(None, help="Name of the LLM provid
     """Delete the API key for a specific provider"""
     if not provider:
         provider = typer.prompt("Provider")
-    if provider in settings.keys:
-        del settings.keys[provider]
+    if provider in settings.providers:
+        del settings.providers[provider]
         settings.save()
         rprint(f"Deleted API key for {provider}")
     else:
