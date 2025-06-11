@@ -1,10 +1,22 @@
 [project]
 name = "troop"
 version = "0.1.0"
-description = "Add your description here"
+description = "Build and manage AI agents from the CLI with PydanticAI and Model Context Protocol"
 readme = "README.md"
 authors = [
     { name = "Paul-Louis Pröve", email = "mail@plpp.de" }
+]
+license = { text = "MIT" }
+keywords = ["ai", "agents", "llm", "cli", "mcp", "pydantic", "openai", "anthropic"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 requires-python = ">=3.12"
 dependencies = [
@@ -12,7 +24,15 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0.2",
     "pydantic-ai>=0.1.10",
+    "rich>=13.0.0",
+    "mcp>=0.1.0",
+    "httpx>=0.24.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/pietz/troop"
+Repository = "https://github.com/pietz/troop"
+Issues = "https://github.com/pietz/troop/issues"
 
 [project.scripts]
 troop = "troop:main"
