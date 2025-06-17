@@ -4,7 +4,10 @@ from rich.table import Table
 
 from ..config import settings, RESERVED_NAMES
 
-app = typer.Typer(name="agent", help="Manage AI agents with their instructions and tools. (list/add/remove/set)")
+app = typer.Typer(
+    name="agent",
+    help="Manage AI agents with their instructions and tools. (list/add/remove/set)",
+)
 
 
 @app.command("list")
@@ -32,30 +35,34 @@ def add_agent(name: str = typer.Argument(None, help="Name of the agent")):
     """Add a new agent"""
     if not name:
         name = typer.prompt("Enter name")
-    
+
     # Validate agent name
     if name in RESERVED_NAMES:
-        rprint(f"[red]Error:[/red] '{name}' is a reserved command name and cannot be used as an agent name")
+        rprint(
+            f"[red]Error:[/red] '{name}' is a reserved command name and cannot be used as an agent name"
+        )
         rprint("\nReserved names: " + ", ".join(sorted(RESERVED_NAMES)))
         return
-    
+
     confirm = True
     if name in settings.agents:
         confirm = typer.confirm(f"Agent {name} already exists. Overwrite it?")
-    
+
     if confirm:
         model = typer.prompt("Enter model (e.g., openai:gpt-4o)")
         instructions = typer.prompt("Enter instructions")
         servers = []
         while True:
-            server = typer.prompt("Enter MCP servers (leave empty to finish)", default="")
+            server = typer.prompt(
+                "Enter MCP servers (leave empty to finish)", default=""
+            )
             if not server:
                 break
             if server not in settings.mcps:
                 rprint(f"Server {server} does not exist")
                 continue
             servers.append(server)
-        
+
         settings.agents[name] = {
             "model": model,
             "instructions": instructions,

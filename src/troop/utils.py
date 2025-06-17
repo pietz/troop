@@ -2,9 +2,9 @@ import os
 import asyncio
 from functools import wraps
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from pydantic_ai.mcp import MCPServerStdio
-from rich.panel import Panel
 
 
 def run_async(f):
@@ -51,10 +51,49 @@ class QuietMCPServer(MCPServerStdio):
 def get_servers(settings, agent_name: str):
     servers = []
     for s in settings.agents[agent_name]["servers"]:
+        mcp_config = settings.mcps[s]
+        # Create environment with MCP-specific variables
+        env = os.environ.copy()
+        if "env" in mcp_config:
+            env.update(mcp_config["env"])
+
         servers.append(
             QuietMCPServer(
-                command=settings.mcps[s]["command"][0],
-                args=settings.mcps[s]["command"][1:],
+                command=mcp_config["command"][0],
+                args=mcp_config["command"][1:],
+                env=env,
             )
         )
     return servers
+
+
+# Provider to environment variable mapping
+PROVIDER_ENV_VARS = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+}
+
+
+def setup_provider_env(model: str, providers: dict) -> Optional[str]:
+    """Extract provider from model string and set API key environment variable.
+
+    Args:
+        model: Model string like "openai:gpt-4o" or "anthropic:claude-3-5-sonnet"
+        providers: Dictionary of provider names to API keys
+
+    Returns:
+        The provider name if API key was set, None otherwise
+    """
+    # Extract provider from model string
+    if ":" in model:
+        provider = model.split(":")[0].lower()
+    else:
+        raise ValueError("Model name must be provided as 'provider:model'.")
+
+    # Set API key if we have it
+    if provider in providers and provider in PROVIDER_ENV_VARS:
+        os.environ[PROVIDER_ENV_VARS[provider]] = providers[provider]
+        return provider
+
+    return None

@@ -3,7 +3,7 @@ from rich.console import Console
 from pydantic_ai import Agent
 
 from .commands import provider_app, mcp_app, agent_app
-from .utils import run_async, get_servers
+from .utils import run_async, get_servers, setup_provider_env
 from .config import settings, RESERVED_NAMES
 
 console = Console()
@@ -32,6 +32,11 @@ def create_agent_command(agent_name: str):
         if not model:
             console.print(f"[red]Error:[/red] No model specified for agent '{agent_name}'")
             return
+        
+        # Set up provider API key environment variable
+        provider = setup_provider_env(model, settings.providers)
+        if provider:
+            console.print(f"[dim]Using API key for {provider}[/dim]")
         
         # Create agent
         llm = Agent(
