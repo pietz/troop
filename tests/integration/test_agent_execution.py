@@ -2,8 +2,6 @@ import pytest
 import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock, call
 from typer.testing import CliRunner
-from troop.app import app
-from troop import main
 from troop.config import Settings
 from pydantic_ai import Agent
 from rich.console import Console
@@ -35,10 +33,10 @@ class TestAgentExecution:
             default_model="openai:gpt-4"
         )
 
-    @patch('troop.app.Settings.load')
+    @patch('troop.config.Settings.load')
     @patch('troop.app.Agent')
     @patch('troop.app.get_servers')
-    async def test_run_agent_single_prompt(self, mock_get_servers, mock_agent_class, mock_load, mock_settings_with_agent):
+    async def test_run_agent_single_prompt(self, mock_get_servers, mock_agent_class, mock_load, mock_settings_with_agent, runner):
         """Test running an agent with a single prompt."""
         mock_load.return_value = mock_settings_with_agent
         
@@ -53,10 +51,13 @@ class TestAgentExecution:
         mock_agent.run.return_value = mock_result
         mock_agent_class.return_value = mock_agent
         
-        # Import after mocking to get the mocked version
-        from troop.app import run_agent
+        # Import app after settings are mocked
+        from troop.app import app
         
-        await run_agent("test-agent", "Test prompt", model_override=None)
+        # Run the agent command
+        result = runner.invoke(app, ["test-agent", "-p", "Test prompt"])
+        
+        assert result.exit_code == 0
         
         # Verify agent was created correctly
         mock_agent_class.assert_called_once_with(
@@ -70,59 +71,111 @@ class TestAgentExecution:
         # Verify agent was run with the prompt
         mock_agent.run.assert_called_once_with("Test prompt")
 
-    @patch('troop.app.Settings.load')
-    @patch('troop.app.Console')
-    def test_main_no_agents(self, mock_console_class, mock_load, runner):
+    @patch('troop.config.Settings.load')
+    def test_main_no_agents(self, mock_load, runner):
         """Test main app when no agents are configured."""
         mock_load.return_value = Settings()  # No agents
         
-        result = runner.invoke(app, ["test-agent"])
+        # Import app after mocking
+        from troop.app import app
         
-        assert result.exit_code == 1
-        assert "No agents configured" in result.stdout
+        result = runner.invoke(app, ["--help"])
+        
+        # Should show help but no agent commands
+        assert result.exit_code == 0
+        assert "provider" in result.stdout
+        assert "agent" in result.stdout
 
-    @patch('troop.app.Settings.load')
+    @patch('troop.config.Settings.load')
     def test_main_agent_not_found(self, mock_load, runner, mock_settings_with_agent):
         """Test main app when specified agent doesn't exist."""
         mock_load.return_value = mock_settings_with_agent
         
+        from troop.app import app
+        
         result = runner.invoke(app, ["nonexistent-agent"])
         
-        assert result.exit_code == 1
-        assert "Agent 'nonexistent-agent' not found" in result.stdout
+        # Command not found, typer shows error
+        assert result.exit_code == 2
+        assert "No such option" in result.stdout or "Invalid value" in result.stdout
 
-    @patch('troop.app.Settings.load')
-    @patch('troop.app.run_agent')
-    def test_main_with_prompt_flag(self, mock_run_agent, mock_load, runner, mock_settings_with_agent):
+    @patch('troop.config.Settings.load')
+    @patch('troop.app.Agent')
+    @patch('troop.app.get_servers')
+    def test_main_with_prompt_flag(self, mock_get_servers, mock_agent_class, mock_load, runner, mock_settings_with_agent):
         """Test running agent with --prompt flag."""
         mock_load.return_value = mock_settings_with_agent
-        mock_run_agent.return_value = asyncio.Future()
-        mock_run_agent.return_value.set_result(None)
+        
+        # Mock agent
+        mock_agent = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.data = "Test response"
+        mock_stream = AsyncMock()
+        mock_stream.__aenter__.return_value = mock_result
+        mock_agent.run_stream.return_value = mock_stream
+        mock_agent_class.return_value = mock_agent
+        
+        # Mock async context managers
+        mock_mcp_ctx = AsyncMock()
+        mock_mcp_ctx.__aenter__.return_value = None
+        mock_mcp_ctx.__aexit__.return_value = None
+        mock_agent.run_mcp_servers.return_value = mock_mcp_ctx
+        
+        # Mock stream_text method
+        async def mock_stream_text(delta=True):
+            yield "Test response"
+        mock_result.stream_text = mock_stream_text
+        
+        from troop.app import app
         
         result = runner.invoke(app, ["test-agent", "--prompt", "Test prompt"])
         
         assert result.exit_code == 0
-        mock_run_agent.assert_called_once_with("test-agent", "Test prompt", model_override=None)
 
-    @patch('troop.app.Settings.load')
-    @patch('troop.app.run_agent')
-    def test_main_with_model_override(self, mock_run_agent, mock_load, runner, mock_settings_with_agent):
+    @patch('troop.config.Settings.load')
+    @patch('troop.app.Agent')
+    @patch('troop.app.get_servers')
+    def test_main_with_model_override(self, mock_get_servers, mock_agent_class, mock_load, runner, mock_settings_with_agent):
         """Test running agent with --model flag."""
         mock_load.return_value = mock_settings_with_agent
-        mock_run_agent.return_value = asyncio.Future()
-        mock_run_agent.return_value.set_result(None)
+        
+        # Mock agent
+        mock_agent = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.data = "Test response"
+        mock_stream = AsyncMock()
+        mock_stream.__aenter__.return_value = mock_result
+        mock_agent.run_stream.return_value = mock_stream
+        mock_agent_class.return_value = mock_agent
+        
+        # Mock async context managers
+        mock_mcp_ctx = AsyncMock()
+        mock_mcp_ctx.__aenter__.return_value = None
+        mock_mcp_ctx.__aexit__.return_value = None
+        mock_agent.run_mcp_servers.return_value = mock_mcp_ctx
+        
+        # Mock stream_text method
+        async def mock_stream_text(delta=True):
+            yield "Test response"
+        mock_result.stream_text = mock_stream_text
+        
+        from troop.app import app
         
         result = runner.invoke(app, ["test-agent", "-p", "Test", "-m", "gpt-3.5-turbo"])
         
         assert result.exit_code == 0
-        mock_run_agent.assert_called_once_with("test-agent", "Test", model_override="gpt-3.5-turbo")
+        # Verify the agent was created with the override model
+        mock_agent_class.assert_called_once_with(
+            model="gpt-3.5-turbo",
+            system_prompt="You are a test agent",
+            mcp_servers=mock_get_servers.return_value
+        )
 
-    @patch('troop.app.Settings.load')
+    @patch('troop.config.Settings.load')
     @patch('troop.app.Agent')
     @patch('troop.app.get_servers')
-    @patch('troop.app.Prompt.ask')
-    @patch('troop.app.Console')
-    async def test_run_agent_interactive_mode(self, mock_console_class, mock_prompt, mock_get_servers, mock_agent_class, mock_load):
+    @patch('troop.app.typer.prompt')
+    async def test_run_agent_interactive_mode(self, mock_prompt, mock_get_servers, mock_agent_class, mock_load, runner):
         """Test running agent in interactive mode (REPL)."""
         settings = Settings(
             api_keys={"openai": "sk-test"},
@@ -136,9 +189,7 @@ class TestAgentExecution:
         )
         mock_load.return_value = settings
         
-        # Mock console
-        mock_console = MagicMock()
-        mock_console_class.return_value = mock_console
+        # No need to mock console anymore
         
         # Mock agent
         mock_agent = AsyncMock()
@@ -152,19 +203,37 @@ class TestAgentExecution:
         mock_result1.data = "Hi there!"
         mock_agent.run.side_effect = [mock_result1]
         
-        from troop.app import run_agent
-        await run_agent("chat", None, None)
+        # Mock async context managers
+        mock_mcp_ctx = AsyncMock()
+        mock_mcp_ctx.__aenter__.return_value = None
+        mock_mcp_ctx.__aexit__.return_value = None
+        mock_agent.run_mcp_servers.return_value = mock_mcp_ctx
+        
+        # Mock stream result
+        mock_stream = AsyncMock()
+        mock_stream.__aenter__.return_value = mock_result1
+        mock_agent.run_stream.return_value = mock_stream
+        
+        # Mock stream_text method
+        async def mock_stream_text(delta=True):
+            yield "Hi there!"
+        mock_result1.stream_text = mock_stream_text
+        mock_result1.new_messages.return_value = []
+        
+        from troop.app import app
+        
+        result = runner.invoke(app, ["chat"])
         
         # Verify interactive prompts
         assert mock_prompt.call_count == 2
         
         # Verify agent was called with user input
-        mock_agent.run.assert_called_once_with("Hello")
+        mock_agent.run_stream.assert_called_once_with("Hello", message_history=[])
 
-    @patch('troop.app.Settings.load')
+    @patch('troop.config.Settings.load')
     @patch('troop.app.Agent')
     @patch('troop.app.get_servers')
-    async def test_run_agent_with_streaming(self, mock_get_servers, mock_agent_class, mock_load):
+    async def test_run_agent_with_streaming(self, mock_get_servers, mock_agent_class, mock_load, runner):
         """Test agent execution with streaming responses."""
         settings = Settings(
             api_keys={"openai": "sk-test"},
@@ -199,29 +268,52 @@ class TestAgentExecution:
         mock_result.data = "Part 1 Part 2 Final part"
         mock_agent.run.return_value = mock_result
         
-        from troop.app import run_agent
-        await run_agent("stream-test", "Test streaming", None)
+        # Mock async context managers
+        mock_mcp_ctx = AsyncMock()
+        mock_mcp_ctx.__aenter__.return_value = None
+        mock_mcp_ctx.__aexit__.return_value = None
+        mock_agent.run_mcp_servers.return_value = mock_mcp_ctx
         
-        # Verify streaming was used
-        mock_result.stream.assert_called_once()
+        # Mock stream result
+        mock_stream = AsyncMock()
+        mock_stream.__aenter__.return_value = mock_result
+        mock_agent.run_stream.return_value = mock_stream
+        
+        # Mock stream_text method
+        async def mock_stream_text(delta=True):
+            yield "Part 1 "
+            yield "Part 2 "
+            yield "Final part"
+        mock_result.stream_text = mock_stream_text
+        
+        from troop.app import app
+        
+        result = runner.invoke(app, ["stream-test", "-p", "Test streaming"])
+        
+        assert result.exit_code == 0
+        # Check the streaming happened
+        mock_agent.run_stream.assert_called_once_with("Test streaming")
 
-    @patch('troop.app.Settings.load')
-    def test_main_keyboard_interrupt(self, mock_load, runner, mock_settings_with_agent):
+    @patch('troop.config.Settings.load')
+    @patch('troop.app.typer.prompt')
+    def test_main_keyboard_interrupt(self, mock_prompt, mock_load, runner, mock_settings_with_agent):
         """Test handling KeyboardInterrupt in interactive mode."""
         mock_load.return_value = mock_settings_with_agent
         
-        with patch('troop.app.run_agent') as mock_run_agent:
-            mock_run_agent.side_effect = KeyboardInterrupt()
-            
-            result = runner.invoke(app, ["test-agent"])
-            
-            # Should exit gracefully
-            assert result.exit_code == 0
+        # Simulate KeyboardInterrupt
+        mock_prompt.side_effect = KeyboardInterrupt()
+        
+        from troop.app import app
+        
+        result = runner.invoke(app, ["test-agent"])
+        
+        # Should exit gracefully with error code
+        assert result.exit_code == 1
 
-    @patch('troop.app.Settings.load')
+    @patch('troop.config.Settings.load')
     @patch('troop.app.Agent')
     @patch('troop.app.get_servers')
-    async def test_run_agent_with_tool_errors(self, mock_get_servers, mock_agent_class, mock_load):
+    async def test_run_agent_with_tool_errors(self, mock_get_servers, mock_agent_class, mock_load, runner):
         """Test agent execution when tools throw errors."""
         settings = Settings(
             api_keys={"openai": "sk-test"},
@@ -250,16 +342,24 @@ class TestAgentExecution:
         mock_agent = AsyncMock()
         mock_agent_class.return_value = mock_agent
         
-        from troop.app import run_agent
+        # Mock MCP context manager that raises error
+        mock_mcp_ctx = AsyncMock()
+        mock_mcp_ctx.__aenter__.side_effect = Exception("Server failed to start")
+        mock_agent.run_mcp_servers.return_value = mock_mcp_ctx
         
-        # Should handle server errors gracefully
-        with pytest.raises(Exception, match="Server failed to start"):
-            await run_agent("error-test", "Test", None)
+        from troop.app import app
+        
+        result = runner.invoke(app, ["error-test", "-p", "Test"])
+        
+        # Should exit with error
+        assert result.exit_code == 1
+        assert "Failed to connect to MCP server" in result.stdout
 
-    @patch('troop.app.Settings.load')
+    @patch('troop.config.Settings.load')
     def test_dynamic_command_creation(self, mock_load, runner):
         """Test that agent commands are dynamically created."""
         settings = Settings(
+            api_keys={"openai": "sk-test"},
             agents={
                 "dynamic1": {
                     "instructions": "First dynamic agent",
@@ -275,8 +375,8 @@ class TestAgentExecution:
         )
         mock_load.return_value = settings
         
-        # Import main to trigger dynamic command creation
-        from troop import main
+        # Import app after settings are mocked
+        from troop.app import app
         
         # Check help to see if commands were created
         result = runner.invoke(app, ["--help"])

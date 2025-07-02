@@ -4,7 +4,7 @@ Build and manage AI agents from the CLI with PydanticAI and Model Context Protoc
 
 ## Introduction
 
-Troop is a modern LLM agent framework built on top of [PydanticAI](https://ai.pydantic.dev/) and the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP). It enables users to easily create, customize, manage, and interact with AI agents through a simple yet powerful CLI.
+Troop is a lightweight CLI wrapper around [PydanticAI](https://ai.pydantic.dev/) and the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP). It enables users to easily create, customize, manage, and interact with AI agents through a simple yet powerful command line interface.
 
 ```bash
 troop researcher -p "Any music events in Paris tonight?"

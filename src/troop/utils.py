@@ -29,6 +29,7 @@ class QuietMCPServer(MCPServerStdio):
         """Start the subprocess exactly like the parent class but silence *stderr*."""
         # Local import to avoid cycles
         from mcp.client.stdio import StdioServerParameters, stdio_client
+        import logging
 
         server_params = StdioServerParameters(
             command=self.command,
@@ -41,11 +42,19 @@ class QuietMCPServer(MCPServerStdio):
         #
         # This is to help with noisy MCP's that have options for verbosity
         with open(os.devnull, "w", encoding=server_params.encoding) as devnull:
-            async with stdio_client(server=server_params, errlog=devnull) as (
-                read_stream,
-                write_stream,
-            ):
-                yield read_stream, write_stream
+            try:
+                async with stdio_client(server=server_params, errlog=devnull) as (
+                    read_stream,
+                    write_stream,
+                ):
+                    yield read_stream, write_stream
+            except GeneratorExit:
+                # Silently handle generator cleanup
+                pass
+            except Exception as e:
+                # Log the error but don't re-raise during cleanup
+                logging.debug(f"Error during MCP server cleanup: {e}")
+                raise
 
 
 def get_servers(settings, agent_name: str):
