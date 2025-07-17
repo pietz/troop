@@ -1,35 +1,38 @@
 import typer
 from rich.console import Console
-from rich.panel import Panel
-from rich.live import Live
 from pydantic_ai import Agent
 
 from .commands import provider_app, mcp_app, agent_app
 from .utils import run_async, get_servers, setup_provider_env
 from .config import settings, RESERVED_NAMES
+from .display import MessageDisplay
 
 console = Console()
+display = MessageDisplay(console)
 
 
-async def stream_response(result, agent_name: str):
-    """Stream response chunks to console"""
-    console.print(
-        f"[bold green]{agent_name.capitalize()}:[/bold green] ", sep="", end=""
-    )
-    async for chunk in result.stream_text(delta=True):
-        console.print(chunk, sep="", end="")
-    console.print()  # Newline after full response
-    console.print()  # Add blank line after agent response
+async def run_agent_with_tools(
+    agent: Agent, prompt: str, agent_name: str, show_tools: bool, message_history=None
+):
+    """Run agent using iter() to capture tool calls and results"""
+    async with agent.iter(prompt, message_history=message_history) as agent_run:
+        async for node in agent_run:
+            if Agent.is_user_prompt_node(node):
+                # User prompt already displayed, skip
+                pass
+            elif Agent.is_model_request_node(node):
+                # Stream the model's response
+                async with node.stream(agent_run.ctx) as request_stream:
+                    await display.handle_streaming_events(request_stream, agent_name)
+            elif Agent.is_call_tools_node(node):
+                # Handle tool calls and results
+                async with node.stream(agent_run.ctx) as tool_stream:
+                    await display.handle_tool_events(tool_stream, show_tools)
+            elif Agent.is_end_node(node):
+                # End of agent run
+                pass
 
-
-async def stream_message(result, sender: str = "Agent"):
-    """Stream a message character by character."""
-    panel = Panel("", title=sender.capitalize(), border_style="blue")
-    with Live(panel, console=console, refresh_per_second=10) as live:
-        async for chunk in result.stream_text(delta=False):
-            panel.renderable = chunk
-            live.update(panel)
-    console.print()
+    return agent_run.result
 
 
 def create_agent_command(agent_name: str):
@@ -43,21 +46,19 @@ def create_agent_command(agent_name: str):
         model: str = typer.Option(
             None, "-m", "--model", help="Override the default model"
         ),
+        show_tools: bool = typer.Option(
+            False, "-t", "--show-tools", help="Show tool calls and results"
+        ),
     ):
-        # Use provided model or agent's default
         agent_config = settings.agents[agent_name]
         model = model or agent_config.get("model")
 
         if not model:
-            console.print(
-                f"[red]Error:[/red] No model specified for agent '{agent_name}'"
-            )
+            display.print_error(f"No model specified for agent '{agent_name}'")
             return
 
         # Set up provider API key environment variable
         provider = setup_provider_env(model, settings.providers)
-        if provider:
-            console.print(f"[dim]Using API key for {provider}[/dim]")
 
         # Create agent
         llm = Agent(
@@ -70,30 +71,25 @@ def create_agent_command(agent_name: str):
             if prompt:
                 async with llm.run_mcp_servers():
                     async with llm.run_stream(prompt) as result:
-                        await stream_message(result, agent_name)
+                        await display.stream_simple_response(result)
             else:
                 messages = []
-
-                console.print(f"[bold]Starting chat with {agent_name}[/bold]")
-
                 async with llm.run_mcp_servers():
+                    console.print()  # Line break before first user prompt
                     while True:
-                        console.print("[bold blue]User:[/bold blue]", sep="", end="")
-                        message = typer.prompt("", type=str, prompt_suffix="")
+                        message = display.prompt_user_input()
 
-                        console.print()
-                        async with llm.run_stream(
-                            message, message_history=messages
-                        ) as result:
-                            await stream_message(result, agent_name)
-                            messages += result.new_messages()
+                        # Run agent with tool display support
+                        result = await run_agent_with_tools(
+                            llm,
+                            message,
+                            agent_name,
+                            show_tools,
+                            message_history=messages,
+                        )
+                        messages += result.new_messages()
         except Exception as e:
-            console.print(
-                f"\n[red]Error:[/red] Failed to connect to MCP server: {str(e)}"
-            )
-            console.print(
-                "[dim]Check that the MCP server command is correct and the server is installed.[/dim]"
-            )
+            display.print_error(f"Failed to connect to MCP server: {str(e)}")
             raise typer.Exit(1)
 
     return agent_command
