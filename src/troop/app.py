@@ -1,5 +1,7 @@
 import typer
 from rich.console import Console
+from rich.panel import Panel
+from rich.live import Live
 from pydantic_ai import Agent
 
 from .commands import provider_app, mcp_app, agent_app
@@ -18,6 +20,16 @@ async def stream_response(result, agent_name: str):
         console.print(chunk, sep="", end="")
     console.print()  # Newline after full response
     console.print()  # Add blank line after agent response
+
+
+async def stream_message(result, sender: str = "Agent"):
+    """Stream a message character by character."""
+    panel = Panel("", title=sender.capitalize(), border_style="blue")
+    with Live(panel, console=console, refresh_per_second=10) as live:
+        async for chunk in result.stream_text(delta=False):
+            panel.renderable = chunk
+            live.update(panel)
+    console.print()
 
 
 def create_agent_command(agent_name: str):
@@ -56,30 +68,24 @@ def create_agent_command(agent_name: str):
 
         try:
             if prompt:
-                # Single prompt mode
                 async with llm.run_mcp_servers():
                     async with llm.run_stream(prompt) as result:
-                        await stream_response(result, agent_name)
+                        await stream_message(result, agent_name)
             else:
-                # Interactive chat mode (default)
                 messages = []
 
                 console.print(f"[bold]Starting chat with {agent_name}[/bold]")
-                # console.print("[dim]Type 'exit' or 'quit' to end the conversation[/dim]\n")
 
                 async with llm.run_mcp_servers():
                     while True:
-                        console.print("[bold blue]User:[/bold blue] ", sep="", end="")
+                        console.print("[bold blue]User:[/bold blue]", sep="", end="")
                         message = typer.prompt("", type=str, prompt_suffix="")
 
-                        # if message.lower() in ["exit", "quit"]:
-                        # break
-
-                        console.print()  # Add blank line after user input
+                        console.print()
                         async with llm.run_stream(
                             message, message_history=messages
                         ) as result:
-                            await stream_response(result, agent_name)
+                            await stream_message(result, agent_name)
                             messages += result.new_messages()
         except Exception as e:
             console.print(
