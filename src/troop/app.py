@@ -12,7 +12,7 @@ display = MessageDisplay(console)
 
 
 async def run_agent_with_tools(
-    agent: Agent, prompt: str, agent_name: str, show_tools: bool, message_history=None
+    agent: Agent, prompt: str, agent_name: str, verbose: bool, message_history=None
 ):
     """Run agent using iter() to capture tool calls and results"""
     async with agent.iter(prompt, message_history=message_history) as agent_run:
@@ -27,7 +27,7 @@ async def run_agent_with_tools(
             elif Agent.is_call_tools_node(node):
                 # Handle tool calls and results
                 async with node.stream(agent_run.ctx) as tool_stream:
-                    await display.handle_tool_events(tool_stream, show_tools)
+                    await display.handle_tool_events(tool_stream, verbose)
             elif Agent.is_end_node(node):
                 # End of agent run
                 pass
@@ -46,8 +46,8 @@ def create_agent_command(agent_name: str):
         model: str = typer.Option(
             None, "-m", "--model", help="Override the default model"
         ),
-        show_tools: bool = typer.Option(
-            False, "-t", "--show-tools", help="Show tool calls and results"
+        verbose: bool = typer.Option(
+            False, "-v", "--verbose", help="Show detailed output including tool calls"
         ),
     ):
         agent_config = settings.agents[agent_name]
@@ -84,7 +84,7 @@ def create_agent_command(agent_name: str):
                             llm,
                             message,
                             agent_name,
-                            show_tools,
+                            verbose,
                             message_history=messages,
                         )
                         messages += result.new_messages()

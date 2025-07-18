@@ -6,7 +6,7 @@ from ..config import settings, RESERVED_NAMES
 
 app = typer.Typer(
     name="agent",
-    help="Manage AI agents with their instructions and tools. (list/add/remove/set)",
+    help="Manage AI agents with their instructions and tools. (list/add/edit/remove/set)",
 )
 
 
@@ -83,6 +83,72 @@ def remove_agent(name: str = typer.Argument(None, help="Name of the Agent")):
         rprint(f"Deleted agent {name}")
     else:
         rprint(f"No agent found with name {name}")
+
+
+@app.command("edit")
+def edit_agent(name: str = typer.Argument(None, help="Name of the agent to edit")):
+    """Edit an existing agent"""
+    if not name:
+        name = typer.prompt("Enter name")
+    
+    if name not in settings.agents:
+        rprint(f"[red]Error:[/red] Agent '{name}' does not exist")
+        return
+    
+    # Get current agent configuration
+    current_agent = settings.agents[name]
+    
+    rprint(f"\n[bold]Editing agent: {name}[/bold]")
+    rprint("[dim]Press Enter to keep current value[/dim]\n")
+    
+    # Edit model
+    new_model = typer.prompt(
+        "Enter model", 
+        default=current_agent.get("model", ""),
+        show_default=True
+    )
+    
+    # Edit instructions
+    rprint(f"\n[dim]Current instructions:[/dim] {current_agent['instructions']}")
+    new_instructions = typer.prompt(
+        "Enter instructions",
+        default=current_agent["instructions"],
+        show_default=False  # Don't show default for long text
+    )
+    
+    # Edit servers
+    rprint(f"\n[dim]Current servers:[/dim] {', '.join(current_agent['servers']) if current_agent['servers'] else 'None'}")
+    rprint("[dim]Enter MCP servers (leave empty to keep current, 'none' to clear all)[/dim]")
+    
+    servers_input = typer.prompt(
+        "Enter MCP servers (comma-separated)",
+        default=", ".join(current_agent['servers']) if current_agent['servers'] else "",
+        show_default=False
+    )
+    
+    if servers_input.strip().lower() == 'none':
+        new_servers = []
+    elif servers_input.strip() == "":
+        new_servers = current_agent['servers']
+    else:
+        # Parse comma-separated list
+        new_servers = [s.strip() for s in servers_input.split(",") if s.strip()]
+        
+        # Validate servers exist
+        invalid_servers = [s for s in new_servers if s not in settings.mcps]
+        if invalid_servers:
+            rprint(f"[yellow]Warning:[/yellow] These servers don't exist: {', '.join(invalid_servers)}")
+            if not typer.confirm("Continue anyway?", default=False):
+                return
+    
+    # Update agent configuration
+    settings.agents[name] = {
+        "model": new_model,
+        "instructions": new_instructions,
+        "servers": new_servers,
+    }
+    settings.save()
+    rprint(f"\n[green]✓[/green] Agent '{name}' updated successfully")
 
 
 @app.command("set")

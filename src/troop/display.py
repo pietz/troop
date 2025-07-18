@@ -95,7 +95,7 @@ class MessageDisplay:
         
         return text_content
     
-    async def handle_tool_events(self, tool_stream, show_tools: bool):
+    async def handle_tool_events(self, tool_stream, verbose: bool):
         """Handle tool call and result events"""
         tool_calls = {}  # Store tool calls by their ID
         
@@ -106,7 +106,7 @@ class MessageDisplay:
                     "name": event.part.tool_name,
                     "args": event.part.args_as_dict(),
                 }
-            elif isinstance(event, FunctionToolResultEvent) and show_tools:
+            elif isinstance(event, FunctionToolResultEvent) and verbose:
                 # Get the corresponding tool call
                 tool_info = tool_calls.get(event.tool_call_id)
                 if tool_info:
