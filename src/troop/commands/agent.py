@@ -1,4 +1,5 @@
 import typer
+import json
 from rich import print as rprint
 from rich.table import Table
 
@@ -10,6 +11,40 @@ app = typer.Typer(
 )
 
 
+def _parse_setting_value(value: str):
+    """Coerce a string value into bool/int/float/dict/list/str.
+
+    - true/false/null/none are coerced to bool/None
+    - integers and floats are coerced numerically
+    - JSON objects/arrays (starting with { or [) are parsed
+    - otherwise returned as string
+    """
+    v = value.strip()
+    if v.lower() in {"true", "false"}:
+        return v.lower() == "true"
+    if v.lower() in {"null", "none"}:
+        return None
+    # int
+    try:
+        if v and (v[0].isdigit() or (v[0] in "+-" and len(v) > 1 and v[1].isdigit())) and "." not in v:
+            return int(v)
+    except Exception:
+        pass
+    # float
+    try:
+        if any(ch in v for ch in [".", "e", "E"]):
+            return float(v)
+    except Exception:
+        pass
+    # json object/array
+    if v.startswith("{") or v.startswith("["):
+        try:
+            return json.loads(v)
+        except Exception:
+            return value
+    return value
+
+
 @app.command("list")
 def list_agents():
     """List all available agents"""
@@ -18,13 +53,24 @@ def list_agents():
     table.add_column("Model", justify="left")
     table.add_column("Instructions", justify="left")
     table.add_column("Servers", justify="left")
+    table.add_column("Settings", justify="left")
 
     for name, agent in settings.agents.items():
+        settings_preview = agent.get("model_settings") or {}
+        if settings_preview:
+            items = list(settings_preview.items())[:3]
+            preview = ", ".join(f"{k}={v}" for k, v in items)
+            if len(settings_preview) > 3:
+                preview += ", ..."
+        else:
+            preview = "-"
+
         table.add_row(
             name,
             agent.get("model", "Not set"),
             agent["instructions"][:30] + "...",
             ", ".join(agent["servers"]),
+            preview,
         )
 
     rprint(table)
@@ -63,10 +109,28 @@ def add_agent(name: str = typer.Argument(None, help="Name of the agent")):
                 continue
             servers.append(server)
 
+        # Optional model settings (key=value per line)
+        model_settings: dict[str, object] = {}
+        rprint("\n[dim]Enter model settings as key=value per line (leave empty to finish)[/dim]")
+        while True:
+            line = typer.prompt("Model setting", default="")
+            if not line:
+                break
+            if "=" not in line:
+                rprint("[red]Invalid format. Use KEY=VALUE[/red]")
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if not key:
+                rprint("[red]Invalid key[/red]")
+                continue
+            model_settings[key] = _parse_setting_value(value)
+
         settings.agents[name] = {
             "model": model,
             "instructions": instructions,
             "servers": servers,
+            "model_settings": model_settings,
         }
         settings.save()
         rprint(f"Added agent {name}")
@@ -141,11 +205,56 @@ def edit_agent(name: str = typer.Argument(None, help="Name of the agent to edit"
             if not typer.confirm("Continue anyway?", default=False):
                 return
     
+    # Edit model settings (MCP-style key=value lines)
+    current_settings = current_agent.get("model_settings", {}) or {}
+    # Compact preview of current settings
+    if current_settings:
+        preview_items = ", ".join(
+            f"{k}={current_settings[k]}" for k in list(current_settings.keys())[:4]
+        )
+        rprint(f"\n[dim]Current model settings:[/dim] {preview_items}"
+               + (" ..." if len(current_settings) > 4 else ""))
+    else:
+        rprint("\n[dim]Current model settings:[/dim] None")
+
+    rprint(
+        "[dim]Enter model settings (KEY=VALUE). Leave empty to keep current, 'none' to clear all.[/dim]"
+    )
+    new_settings: dict[str, object] | None = None
+    received_any = False
+    while True:
+        line = typer.prompt("Model setting", default="")
+        if not line:
+            break
+        if line.strip().lower() == "none":
+            new_settings = {}
+            received_any = True
+            break
+        if "=" not in line:
+            rprint("[red]Invalid format. Use KEY=VALUE[/red]")
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            rprint("[red]Invalid key[/red]")
+            continue
+        if new_settings is None:
+            new_settings = {}
+        new_settings[key] = _parse_setting_value(value)
+        received_any = True
+
+    # Decide final settings
+    if not received_any:
+        final_settings = current_settings
+    else:
+        final_settings = new_settings or {}
+
     # Update agent configuration
     settings.agents[name] = {
         "model": new_model,
         "instructions": new_instructions,
         "servers": new_servers,
+        "model_settings": final_settings,
     }
     settings.save()
     rprint(f"\n[green]✓[/green] Agent '{name}' updated successfully")

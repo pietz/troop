@@ -60,21 +60,30 @@ def create_agent_command(agent_name: str):
         # Set up provider API key environment variable
         provider = setup_provider_env(model, settings.providers)
 
-        # Create agent
-        llm = Agent(
-            model=model,
-            system_prompt=agent_config["instructions"],
-            mcp_servers=get_servers(settings, agent_name),
-        )
+        # Create agent with optional model_settings from config
+        agent_ms = agent_config.get("model_settings") or None
+        if agent_ms:
+            llm = Agent(
+                model=model,
+                system_prompt=agent_config["instructions"],
+                toolsets=get_servers(settings, agent_name),
+                model_settings=agent_ms,
+            )
+        else:
+            llm = Agent(
+                model=model,
+                system_prompt=agent_config["instructions"],
+                toolsets=get_servers(settings, agent_name),
+            )
 
         try:
             if prompt:
-                async with llm.run_mcp_servers():
+                async with llm:
                     async with llm.run_stream(prompt) as result:
                         await display.stream_simple_response(result)
             else:
                 messages = []
-                async with llm.run_mcp_servers():
+                async with llm:
                     console.print()  # Line break before first user prompt
                     while True:
                         message = display.prompt_user_input()

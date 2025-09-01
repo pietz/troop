@@ -40,7 +40,7 @@ class TestAgentExecutionSimple:
         
         with patch('troop.config.Settings.load') as mock_load:
             mock_load.return_value = Settings(
-                mcp_servers={
+                mcps={
                     "test-server": {
                         "command": ["echo", "test"],
                         "env": {}
@@ -88,11 +88,9 @@ class TestAgentExecutionSimple:
         mock_stream.__aexit__.return_value = None
         mock_agent.run_stream.return_value = mock_stream
         
-        # Mock MCP servers context manager
-        mock_mcp_ctx = AsyncMock()
-        mock_mcp_ctx.__aenter__.return_value = None
-        mock_mcp_ctx.__aexit__.return_value = None
-        mock_agent.run_mcp_servers.return_value = mock_mcp_ctx
+        # Agent context manager (replacement for deprecated run_mcp_servers)
+        mock_agent.__aenter__.return_value = mock_agent
+        mock_agent.__aexit__.return_value = None
         
         # Mock stream_text method
         async def mock_stream_text(delta=True):
@@ -100,7 +98,7 @@ class TestAgentExecutionSimple:
         mock_result.stream_text = mock_stream_text
         
         mock_agent_class.return_value = mock_agent
-        mock_get_servers.return_value = {}
+        mock_get_servers.return_value = []
         
         # Test the create_agent_command function directly
         from troop.app import create_agent_command
@@ -124,11 +122,11 @@ class TestAgentExecutionSimple:
             result = runner.invoke(test_command, ["--prompt", "Test prompt"])
             
             assert result.exit_code == 0
-            mock_agent_class.assert_called_once_with(
-                model="gpt-4",
-                system_prompt="Test instructions",
-                mcp_servers={}
-            )
+            mock_agent_class.assert_called_once()
+            _, kwargs = mock_agent_class.call_args
+            assert kwargs.get("model") == "gpt-4"
+            assert kwargs.get("system_prompt") == "Test instructions"
+            assert kwargs.get("toolsets") == mock_get_servers.return_value
             mock_agent.run_stream.assert_called_once_with("Test prompt")
     
     def test_error_handling_no_model(self):
@@ -155,11 +153,9 @@ class TestAgentExecutionSimple:
     @patch('troop.app.Agent')
     def test_mcp_server_error_handling(self, mock_agent_class):
         """Test error handling when MCP server fails."""
-        # Mock agent that raises error
+        # Mock agent that raises error on context enter
         mock_agent = AsyncMock()
-        mock_mcp_ctx = AsyncMock()
-        mock_mcp_ctx.__aenter__.side_effect = Exception("MCP server failed")
-        mock_agent.run_mcp_servers.return_value = mock_mcp_ctx
+        mock_agent.__aenter__.side_effect = Exception("MCP server failed")
         mock_agent_class.return_value = mock_agent
         
         from troop.app import create_agent_command
@@ -177,7 +173,7 @@ class TestAgentExecutionSimple:
             mock_settings.providers = {"openai": "sk-test"}
             
             with patch('troop.app.get_servers') as mock_get_servers:
-                mock_get_servers.return_value = {"failing-server": "mock"}
+                mock_get_servers.return_value = []
                 
                 runner = CliRunner()
                 result = runner.invoke(test_command, ["--prompt", "Test"])

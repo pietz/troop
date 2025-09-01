@@ -40,9 +40,8 @@ class TestAgentExecution:
         """Test running an agent with a single prompt."""
         mock_load.return_value = mock_settings_with_agent
         
-        # Mock MCP server
-        mock_server = AsyncMock()
-        mock_get_servers.return_value = {"test-server": mock_server}
+        # Mock toolsets
+        mock_get_servers.return_value = []
         
         # Mock agent
         mock_agent = AsyncMock()
@@ -60,10 +59,11 @@ class TestAgentExecution:
         assert result.exit_code == 0
         
         # Verify agent was created correctly
-        mock_agent_class.assert_called_once_with(
-            "openai:gpt-4",
-            system_prompt="You are a test agent"
-        )
+        mock_agent_class.assert_called_once()
+        args, kwargs = mock_agent_class.call_args
+        assert kwargs.get("model", args[0] if args else None) == "openai:gpt-4"
+        assert kwargs.get("system_prompt") == "You are a test agent"
+        assert kwargs.get("toolsets") == mock_get_servers.return_value
         
         # Verify MCP server setup
         mock_agent.tool.assert_called()
@@ -115,11 +115,9 @@ class TestAgentExecution:
         mock_agent.run_stream.return_value = mock_stream
         mock_agent_class.return_value = mock_agent
         
-        # Mock async context managers
-        mock_mcp_ctx = AsyncMock()
-        mock_mcp_ctx.__aenter__.return_value = None
-        mock_mcp_ctx.__aexit__.return_value = None
-        mock_agent.run_mcp_servers.return_value = mock_mcp_ctx
+        # Agent context manager
+        mock_agent.__aenter__.return_value = mock_agent
+        mock_agent.__aexit__.return_value = None
         
         # Mock stream_text method
         async def mock_stream_text(delta=True):
@@ -148,11 +146,9 @@ class TestAgentExecution:
         mock_agent.run_stream.return_value = mock_stream
         mock_agent_class.return_value = mock_agent
         
-        # Mock async context managers
-        mock_mcp_ctx = AsyncMock()
-        mock_mcp_ctx.__aenter__.return_value = None
-        mock_mcp_ctx.__aexit__.return_value = None
-        mock_agent.run_mcp_servers.return_value = mock_mcp_ctx
+        # Agent context manager
+        mock_agent.__aenter__.return_value = mock_agent
+        mock_agent.__aexit__.return_value = None
         
         # Mock stream_text method
         async def mock_stream_text(delta=True):
@@ -165,11 +161,11 @@ class TestAgentExecution:
         
         assert result.exit_code == 0
         # Verify the agent was created with the override model
-        mock_agent_class.assert_called_once_with(
-            model="gpt-3.5-turbo",
-            system_prompt="You are a test agent",
-            mcp_servers=mock_get_servers.return_value
-        )
+        mock_agent_class.assert_called_once()
+        _, kwargs = mock_agent_class.call_args
+        assert kwargs.get("model") == "gpt-3.5-turbo"
+        assert kwargs.get("system_prompt") == "You are a test agent"
+        assert kwargs.get("toolsets") == mock_get_servers.return_value
 
     @patch('troop.config.Settings.load')
     @patch('troop.app.Agent')
@@ -203,11 +199,9 @@ class TestAgentExecution:
         mock_result1.data = "Hi there!"
         mock_agent.run.side_effect = [mock_result1]
         
-        # Mock async context managers
-        mock_mcp_ctx = AsyncMock()
-        mock_mcp_ctx.__aenter__.return_value = None
-        mock_mcp_ctx.__aexit__.return_value = None
-        mock_agent.run_mcp_servers.return_value = mock_mcp_ctx
+        # Agent context manager
+        mock_agent.__aenter__.return_value = mock_agent
+        mock_agent.__aexit__.return_value = None
         
         # Mock stream result
         mock_stream = AsyncMock()
@@ -333,19 +327,15 @@ class TestAgentExecution:
         )
         mock_load.return_value = settings
         
-        # Mock MCP server that fails
-        mock_server = AsyncMock()
-        mock_server.run.side_effect = Exception("Server failed to start")
-        mock_get_servers.return_value = {"error-server": mock_server}
+        # Toolsets (unused)
+        mock_get_servers.return_value = []
         
         # Mock agent
         mock_agent = AsyncMock()
         mock_agent_class.return_value = mock_agent
         
-        # Mock MCP context manager that raises error
-        mock_mcp_ctx = AsyncMock()
-        mock_mcp_ctx.__aenter__.side_effect = Exception("Server failed to start")
-        mock_agent.run_mcp_servers.return_value = mock_mcp_ctx
+        # Agent context manager that raises error
+        mock_agent.__aenter__.side_effect = Exception("Server failed to start")
         
         from troop.app import app
         
