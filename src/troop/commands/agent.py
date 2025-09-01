@@ -96,20 +96,8 @@ def add_agent(name: str = typer.Argument(None, help="Name of the agent")):
 
     if confirm:
         model = typer.prompt("Enter model (e.g., openai:gpt-4o)")
-        instructions = typer.prompt("Enter instructions")
-        servers = []
-        while True:
-            server = typer.prompt(
-                "Enter MCP servers (leave empty to finish)", default=""
-            )
-            if not server:
-                break
-            if server not in settings.mcps:
-                rprint(f"Server {server} does not exist")
-                continue
-            servers.append(server)
 
-        # Optional model settings (key=value per line)
+        # Optional model settings (ask right after model)
         model_settings: dict[str, object] = {}
         rprint("\n[dim]Enter model settings as key=value per line (leave empty to finish)[/dim]")
         while True:
@@ -125,6 +113,19 @@ def add_agent(name: str = typer.Argument(None, help="Name of the agent")):
                 rprint("[red]Invalid key[/red]")
                 continue
             model_settings[key] = _parse_setting_value(value)
+
+        instructions = typer.prompt("Enter instructions")
+        servers = []
+        while True:
+            server = typer.prompt(
+                "Enter MCP servers (leave empty to finish)", default=""
+            )
+            if not server:
+                break
+            if server not in settings.mcps:
+                rprint(f"Server {server} does not exist")
+                continue
+            servers.append(server)
 
         settings.agents[name] = {
             "model": model,
