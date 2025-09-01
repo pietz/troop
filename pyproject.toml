@@ -20,10 +20,10 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "typer>=0.15.2",
+    "typer>=0.17.3",
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0.2",
-    "pydantic-ai>=0.3.4",
+    "pydantic-ai>=0.8.1",
 ]
 
 [project.urls]
