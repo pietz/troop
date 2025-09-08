@@ -3,36 +3,13 @@ from rich.console import Console
 from pydantic_ai import Agent
 
 from .commands import provider_app, mcp_app, agent_app
-from .utils import run_async, get_servers, setup_provider_env
+from .utils import run_async
 from .config import settings, RESERVED_NAMES
 from .display import MessageDisplay
+from .runner import AgentRunner
 
 console = Console()
 display = MessageDisplay(console)
-
-
-async def run_agent_with_tools(
-    agent: Agent, prompt: str, agent_name: str, verbose: bool, message_history=None
-):
-    """Run agent using iter() to capture tool calls and results"""
-    async with agent.iter(prompt, message_history=message_history) as agent_run:
-        async for node in agent_run:
-            if Agent.is_user_prompt_node(node):
-                # User prompt already displayed, skip
-                pass
-            elif Agent.is_model_request_node(node):
-                # Stream the model's response
-                async with node.stream(agent_run.ctx) as request_stream:
-                    await display.handle_streaming_events(request_stream, agent_name)
-            elif Agent.is_call_tools_node(node):
-                # Handle tool calls and results
-                async with node.stream(agent_run.ctx) as tool_stream:
-                    await display.handle_tool_events(tool_stream, verbose)
-            elif Agent.is_end_node(node):
-                # End of agent run
-                pass
-
-    return agent_run.result
 
 
 def create_agent_command(agent_name: str):
@@ -50,55 +27,46 @@ def create_agent_command(agent_name: str):
             False, "-v", "--verbose", help="Show detailed output including tool calls"
         ),
     ):
-        agent_config = settings.agents[agent_name]
-        model = model or agent_config.get("model")
-
-        if not model:
-            display.print_error(f"No model specified for agent '{agent_name}'")
-            return
-
-        # Set up provider API key environment variable
-        provider = setup_provider_env(model, settings.providers)
-
-        # Create agent with optional model_settings from config
-        agent_ms = agent_config.get("model_settings") or None
-        if agent_ms:
-            llm = Agent(
-                model=model,
-                system_prompt=agent_config["instructions"],
-                toolsets=get_servers(settings, agent_name),
-                model_settings=agent_ms,
-            )
-        else:
-            llm = Agent(
-                model=model,
-                system_prompt=agent_config["instructions"],
-                toolsets=get_servers(settings, agent_name),
-            )
-
         try:
+            # Build runner (validates provider and servers)
+            runner = AgentRunner.from_config(settings, agent_name, model_override=model)
+
             if prompt:
-                async with llm:
-                    async with llm.run_stream(prompt) as result:
-                        await display.stream_simple_response(result)
+                # Unified execution path for single-prompt mode
+                async with runner.agent:
+                    await runner.run_once(
+                        prompt,
+                        display,
+                        verbose,
+                        message_history=None,
+                    )
             else:
+                # Interactive chat mode using the same execution pipeline
                 messages = []
-                async with llm:
+                async with runner.agent:
                     console.print()  # Line break before first user prompt
                     while True:
                         message = display.prompt_user_input()
 
                         # Run agent with tool display support
-                        result = await run_agent_with_tools(
-                            llm,
+                        result = await runner.run_once(
                             message,
-                            agent_name,
+                            display,
                             verbose,
                             message_history=messages,
                         )
                         messages += result.new_messages()
+        except KeyboardInterrupt:
+            display.print_error("Interrupted by user")
+            raise typer.Exit(1)
+        except ValueError as e:
+            display.print_error(str(e))
+            raise typer.Exit(1)
+        except KeyError as e:
+            display.print_error(f"Missing configuration: {e}")
+            raise typer.Exit(1)
         except Exception as e:
-            display.print_error(f"Failed to connect to MCP server: {str(e)}")
+            display.print_error(f"Agent run failed: {str(e)}")
             raise typer.Exit(1)
 
     return agent_command
@@ -111,7 +79,7 @@ app.add_typer(provider_app, name="provider")
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(agent_app, name="agent")
 
-# Dynamically add agent commands at startup
+# Dynamically add agent commands at startup (load settings lazily)
 for agent_name in settings.agents:
     if agent_name not in RESERVED_NAMES:
         app.command(name=agent_name)(create_agent_command(agent_name))

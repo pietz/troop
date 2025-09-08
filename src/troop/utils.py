@@ -59,7 +59,10 @@ class QuietMCPServer(MCPServerStdio):
 
 def get_servers(settings, agent_name: str):
     servers = []
-    for s in settings.agents[agent_name]["servers"]:
+    agent_cfg = settings.agents[agent_name]
+    # Support legacy key name 'mcp_servers' for backward compatibility
+    server_names = agent_cfg.get("servers") or agent_cfg.get("mcp_servers") or []
+    for s in server_names:
         mcp_config = settings.mcps[s]
         # Create environment with MCP-specific variables
         env = os.environ.copy()
