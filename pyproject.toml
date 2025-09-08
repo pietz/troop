@@ -1,6 +1,6 @@
 [project]
 name = "troop"
-version = "0.2.1"
+version = "0.2.2"
 description = "Build and manage AI agents from the CLI with PydanticAI and Model Context Protocol"
 readme = "README.md"
 authors = [
@@ -23,7 +23,7 @@ dependencies = [
     "typer>=0.17.3",
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0.2",
-    "pydantic-ai>=0.8.1",
+    "pydantic-ai>=1.0.1",
 ]
 
 [project.urls]
