@@ -1,0 +1,11 @@
+providers: {}
+mcps: {}
+agents:
+  demo:
+    instructions: "You are a helpful test agent."
+    model: demo-profile
+    servers: []
+models:
+  demo-profile:
+    model: test
+    settings: {}

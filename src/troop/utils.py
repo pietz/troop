@@ -5,6 +5,10 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from pydantic_ai.mcp import MCPServerStdio
+from pydantic_ai.models import Model, infer_model
+from pydantic_ai.settings import ModelSettings
+
+from .config import Settings
 
 
 def run_async(f):
@@ -57,26 +61,35 @@ class QuietMCPServer(MCPServerStdio):
                 raise
 
 
-def get_servers(settings, agent_name: str):
-    servers = []
-    agent_cfg = settings.agents[agent_name]
-    # Support legacy key name 'mcp_servers' for backward compatibility
-    server_names = agent_cfg.get("servers") or agent_cfg.get("mcp_servers") or []
-    for s in server_names:
-        mcp_config = settings.mcps[s]
-        # Create environment with MCP-specific variables
+def get_tools(agent_name: str, settings: Settings) -> list:
+    tools = []
+    mcps = settings.agents[agent_name].get("mcps") or []
+    missing = [mcp for mcp in mcps if mcp not in settings.mcps]
+    if missing:
+        raise KeyError(f"Unknown MCP servers: {', '.join(missing)}")
+    for mcp in mcps:
         env = os.environ.copy()
-        if "env" in mcp_config:
-            env.update(mcp_config["env"])
+        if "env" in mcp:
+            env.update(mcp["env"])
 
-        servers.append(
+        tools.append(
             QuietMCPServer(
-                command=mcp_config["command"][0],
-                args=mcp_config["command"][1:],
+                command=mcp["command"][0],
+                args=mcp["command"][1:],
                 env=env,
             )
         )
-    return servers
+    return tools
+
+def get_model(model_name: str, settings) -> Model:
+    if model_name in settings.models:
+        model = infer_model(settings.models[model_name].get("model"))
+        model._settings = ModelSettings(
+            **settings.models[model_name].get("settings", {})
+        )
+    else:
+        model = infer_model(model_name)
+    return model
 
 
 # Provider to environment variable mapping
@@ -87,25 +100,12 @@ PROVIDER_ENV_VARS = {
 }
 
 
-def setup_provider_env(model: str, providers: dict) -> Optional[str]:
-    """Extract provider from model string and set API key environment variable.
-
-    Args:
-        model: Model string like "openai:gpt-4o" or "anthropic:claude-3-5-sonnet"
-        providers: Dictionary of provider names to API keys
-
-    Returns:
-        The provider name if API key was set, None otherwise
+def setup_provider_env(model: Model, providers: dict) -> Optional[str]:
+    """Set the correct API key env var based on provider.
+    Returns the provider if an env var was set.
     """
-    # Extract provider from model string
-    if ":" in model:
-        provider = model.split(":")[0].lower()
-    else:
-        raise ValueError("Model name must be provided as 'provider:model'.")
-
-    # Set API key if we have it
+    provider = model.system.lower()
     if provider in providers and provider in PROVIDER_ENV_VARS:
         os.environ[PROVIDER_ENV_VARS[provider]] = providers[provider]
         return provider
-
     return None

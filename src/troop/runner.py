@@ -1,10 +1,12 @@
 from __future__ import annotations
-
 from typing import Any
 
 from pydantic_ai import Agent
+from pydantic_ai.models import infer_model
+from pydantic_ai.settings import ModelSettings
 
-from .utils import get_servers, setup_provider_env
+from .config import Settings
+from .utils import get_tools, get_model, setup_provider_env
 from .display import MessageDisplay
 
 
@@ -18,31 +20,22 @@ class AgentRunner:
     @classmethod
     def from_config(
         cls,
-        settings: Any,
+        settings: Settings,
         agent_name: str,
-        model_override: str | None = None,
+        model_name: str | None = None,
     ) -> "AgentRunner":
+        if agent_name not in settings.agents:
+            raise KeyError(f"Unknown agent: {agent_name}")
         agent_cfg = settings.agents[agent_name]
-        model = model_override or agent_cfg.get("model")
-        if not model:
-            raise ValueError(f"No model specified for agent '{agent_name}'")
-
-        # Set provider env and validate MCP servers
+        model = get_model(model_name or agent_cfg.get("model"), settings)
+        tools = get_tools(agent_name, settings)
         setup_provider_env(model, settings.providers)
-
-        server_names = agent_cfg.get("servers") or []
-        missing = [s for s in server_names if s not in settings.mcps]
-        if missing:
-            raise KeyError(f"Unknown MCP servers: {', '.join(missing)}")
 
         kwargs: dict[str, Any] = {
             "model": model,
-            "system_prompt": agent_cfg["instructions"],
-            "toolsets": get_servers(settings, agent_name),
+            "instructions": agent_cfg["instructions"],
+            "tools": tools,
         }
-        ms = agent_cfg.get("model_settings") or None
-        if ms:
-            kwargs["model_settings"] = ms
 
         return cls(agent=Agent(**kwargs), name=agent_name)
 

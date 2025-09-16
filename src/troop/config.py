@@ -12,6 +12,7 @@ class Settings(BaseModel):
     providers: dict[str, str] = {}
     mcps: dict[str, dict] = {}
     agents: dict[str, dict] = {}
+    models: dict[str, dict] = {}
     default_agent: str | None = None
 
     def save(self):
@@ -24,24 +25,10 @@ class Settings(BaseModel):
         """Load settings from the user config file with simple migrations."""
         if not config_path.exists():
             return cls()
-
         with open(config_path, "r") as f:
             data = yaml.safe_load(f)
-
         if not data:
             return cls()
-
-        # Migrations from old config format
-        if "keys" in data:
-            data["providers"] = data.pop("keys")
-        if "servers" in data:
-            data["mcps"] = data.pop("servers")
-        if "agent" in data:
-            data["default_agent"] = data.pop("agent")
-        if "model" in data:
-            # Deprecated field; ignore
-            data.pop("model")
-
         return cls(**data)
 
 
